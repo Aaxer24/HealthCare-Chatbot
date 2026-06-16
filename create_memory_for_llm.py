@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
@@ -6,13 +7,10 @@ from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
+from src.config import DATA_PATH, DB_FAISS_PATH, EMBEDDING_MODEL, VECTORSTORE_METADATA_PATH
+
 
 load_dotenv(find_dotenv())
-
-BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "data"
-DB_FAISS_PATH = BASE_DIR / "vectorstore" / "db_faiss"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 def load_pdf_files(data_path: Path):
@@ -48,7 +46,10 @@ def create_chunks(documents):
 
 
 def get_embedding_model():
-    return HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    return HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        encode_kwargs={"normalize_embeddings": True},
+    )
 
 
 def main():
@@ -63,6 +64,19 @@ def main():
 
     db = FAISS.from_documents(text_chunks, embedding_model)
     db.save_local(str(DB_FAISS_PATH))
+    VECTORSTORE_METADATA_PATH.write_text(
+        json.dumps(
+            {
+                "embedding_model": EMBEDDING_MODEL,
+                "chunk_size": 900,
+                "chunk_overlap": 150,
+                "document_count": len(documents),
+                "chunk_count": len(text_chunks),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print(f"Saved FAISS vector store at {DB_FAISS_PATH}")
 
 

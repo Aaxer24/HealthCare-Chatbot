@@ -1,29 +1,37 @@
 # Medical Knowledge Chatbot
 
-An interactive healthcare chatbot that uses retrieval-augmented generation over curated medical PDFs. The app retrieves relevant passages from a FAISS vector store, sends grounded context to LLaMA-4 through Groq, and returns conversational answers with source citations.
+An interactive healthcare chatbot that uses retrieval-augmented generation over curated medical PDFs. The app retrieves relevant passages from a FAISS vector store, reranks the results, sends grounded context to Groq, and returns conversational answers with source citations and snippet previews.
 
 ## Features
 
 - RAG over trusted medical PDFs stored in `data/`
-- Streamlit chat interface with persistent session history
-- LLaMA-4 via Groq for low-latency responses
+- Streamlit chat interface with session history
+- Groq chat model for low-latency responses
+- BGE embeddings for stronger semantic retrieval
+- MMR retrieval plus cross-encoder reranking for better passage quality
 - Medical safety prompt with emergency-care guidance and uncertainty handling
-- Source citations with document names and page numbers
-- MMR retrieval to improve context diversity
-- Cached embeddings, vector store, and model clients for faster responses
-- Environment-based configuration for deployment
+- Source previews showing document names, pages, relevance scores, and snippets
+- General-chat router so greetings and capability questions do not search PDFs
+- Feedback buttons for answer quality collection
+- Modular code structure for easier maintenance and deployment
 
 ## Project Structure
 
 ```text
 .
-├── data/                       # Source medical PDFs
-├── vectorstore/db_faiss/        # Generated FAISS index
-├── create_memory_for_llm.py     # Builds the vector store from PDFs
-├── create_memory_with_llm.py    # CLI smoke test for the RAG pipeline
-├── medibot.py                  # Streamlit application
-├── requirements.txt
-└── .env.example
+|-- data/                       # Source medical PDFs
+|-- vectorstore/db_faiss/        # Generated FAISS index
+|-- src/
+|   |-- config.py                # Settings, paths, environment variables
+|   |-- prompts.py               # RAG, routing, and style prompts
+|   |-- rag.py                   # Embeddings, FAISS, reranking, citations
+|   |-- router.py                # General-chat and answer-depth routing
+|   `-- ui.py                    # Streamlit styling and UI helpers
+|-- create_memory_for_llm.py     # Builds the vector store from PDFs
+|-- create_memory_with_llm.py    # CLI smoke test for the RAG pipeline
+|-- medibot.py                   # Streamlit entrypoint
+|-- requirements.txt
+`-- .env.example
 ```
 
 ## Setup
@@ -35,13 +43,13 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-2. Install dependencies.
+In this local project, your current environment is Conda-style, so these commands also work:
 
 ```powershell
-pip install -r requirements.txt
+.\venv\python.exe -m pip install -r requirements.txt
 ```
 
-3. Configure secrets.
+2. Configure secrets.
 
 ```powershell
 Copy-Item .env.example .env
@@ -49,16 +57,18 @@ Copy-Item .env.example .env
 
 Add your Groq API key to `.env`.
 
-4. Build or rebuild the vector store.
+3. Build or rebuild the vector store.
 
 ```powershell
-python create_memory_for_llm.py
+.\venv\python.exe create_memory_for_llm.py
 ```
 
-5. Run the app.
+Rebuild is required after changing PDFs or changing the embedding model.
+
+4. Run the app.
 
 ```powershell
-streamlit run medibot.py
+.\venv\python.exe -m streamlit run medibot.py
 ```
 
 ## Configuration
@@ -70,7 +80,9 @@ These values can be set in `.env` or Streamlit secrets.
 | `GROQ_API_KEY` | Groq API key | Required |
 | `GROQ_MODEL` | Chat model | `llama-3.3-70b-versatile` |
 | `MODEL_TEMPERATURE` | Response randomness | `0.1` |
-| `RETRIEVAL_K` | Number of retrieved chunks | `5` |
+| `RETRIEVAL_K` | Initial retrieved chunks before reranking | `8` |
+| `RERANK_K` | Final chunks after reranking | `5` |
+| `ENABLE_RERANKING` | Enable cross-encoder reranking | `true` |
 | `LOG_LEVEL` | Python logging level | `INFO` |
 
 ## Medical Safety
@@ -79,6 +91,6 @@ This chatbot is for educational information only. It does not diagnose condition
 
 ## Resume Highlights
 
-- Developed an interactive medical chatbot using RAG over trusted medical PDFs, providing symptom-based guidance with source citations.
-- Built a real-time Streamlit conversational interface integrated with LLaMA-4 through Groq for fast responses.
-- Reduced hallucination risk with strict grounding prompts, follow-up question rewriting, MMR retrieval, bounded chat history, and source citation.
+- Developed an interactive medical chatbot using RAG over trusted medical PDFs, providing symptom-based guidance with source citations and snippet previews.
+- Improved answer grounding with BGE embeddings, MMR retrieval, cross-encoder reranking, follow-up question rewriting, and source attribution.
+- Built a real-time Streamlit conversational interface integrated with Groq, general-chat routing, answer-depth routing, and feedback collection.
