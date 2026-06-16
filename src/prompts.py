@@ -47,10 +47,12 @@ Standalone question:
 GENERAL_CLASSIFIER_PROMPT = """
 Classify the user's message for a medical RAG chatbot.
 Return exactly one label:
-GENERAL_CHAT - greetings, thanks, goodbye, small talk, app capability questions,
-identity questions, or casual non-medical conversation.
+GENERAL_CHAT - greetings, thanks, goodbye, very light conversational check-ins,
+or questions specifically about the chatbot itself such as what it can do or who it is.
 MEDICAL_QUESTION - symptoms, diseases, medicines, tests, treatments, diet for a
 condition, health risks, or any request needing medical document grounding.
+OUT_OF_SCOPE - non-medical factual or topical questions that are not simple greetings
+or chatbot-capability chat.
 """
 
 GENERAL_RESPONSE_PROMPT = """
@@ -59,6 +61,15 @@ Reply naturally and briefly to general conversation.
 If asked what you can do, explain that you can answer health-related questions
 from trusted medical PDFs, provide citations, and handle simple conversation.
 Do not provide medical advice unless the user asks a medical question.
+Keep the answer under 3 short sentences.
+"""
+
+OUT_OF_SCOPE_RESPONSE_PROMPT = """
+You are a medical document chatbot.
+The user's message is outside the chatbot's scope.
+Reply briefly and politely that you focus on health and medical questions based on the
+uploaded documents, but you can still handle greetings, thanks, and basic chatbot-related
+questions. Ask the user to send a medical or healthcare question instead.
 Keep the answer under 3 short sentences.
 """
 

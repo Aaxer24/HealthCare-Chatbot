@@ -4,7 +4,7 @@ import streamlit as st
 
 from src.config import LOGGER, get_config
 from src.rag import answer_question, render_source_previews
-from src.router import answer_general_chat, answer_style_instruction, is_general_chat
+from src.router import answer_general_chat, answer_out_of_scope, answer_style_instruction, classify_message
 from src.ui import (
     format_timestamp,
     render_empty_state,
@@ -68,17 +68,28 @@ def main() -> None:
         return
 
     try:
-        should_skip_rag = is_general_chat(prompt, config)
+        message_type = classify_message(prompt, config)
     except Exception:
         LOGGER.exception("Failed to classify user message")
-        should_skip_rag = False
+        message_type = "MEDICAL_QUESTION"
 
-    if should_skip_rag:
+    if message_type == "GENERAL_CHAT":
         with st.spinner("Thinking..."):
             try:
                 answer = answer_general_chat(prompt, config)
             except Exception as exc:
                 LOGGER.exception("Failed to answer general message")
+                st.error(f"Unable to generate an answer right now: {exc}")
+                return
+        render_assistant_response(answer)
+        return
+
+    if message_type == "OUT_OF_SCOPE":
+        with st.spinner("Thinking..."):
+            try:
+                answer = answer_out_of_scope(prompt, config)
+            except Exception as exc:
+                LOGGER.exception("Failed to answer out-of-scope message")
                 st.error(f"Unable to generate an answer right now: {exc}")
                 return
         render_assistant_response(answer)
