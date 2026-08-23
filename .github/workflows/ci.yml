@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  # Builds the Docker image, pushes it to GitHub Container Registry (GHCR --
+  # no extra registry account needed, authenticates with the workflow's own
+  # built-in token), then SSHes into the EC2 instance to pull and restart the
+  # container, on every push to main once tests pass.
+  #
+  # One-time setup required before this job can succeed:
+  #   1. An EC2 instance (Ubuntu) with Docker installed -- see README.
+  #   2. Its security group allows inbound 22 (SSH) and 80 (HTTP).
+  #   3. Four repo secrets (Settings -> Secrets and variables -> Actions):
+  #        EC2_HOST      -- the instance's public IP
+  #        EC2_USER      -- ubuntu (or ec2-user for Amazon Linux)
+  #        EC2_SSH_KEY   -- the full contents of the instance's private key
+  #        GROQ_API_KEY  -- passed through to the running container
+  build-and-deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the vector store is committed
+        run: |
+          if [ ! -f vectorstore/db_faiss/index.faiss ]; then
+            echo "::error::vectorstore/db_faiss/index.faiss is missing from this commit."
+            echo "::error::Rebuild it locally (python create_memory_for_llm.py) and commit vectorstore/ before pushing -- the Docker image bakes in whatever is committed, it does not regenerate it at build time."
+            exit 1
+          fi
+
+      # GHCR image names must be lowercase; the GitHub repo/owner name here
+      # has uppercase letters, so this can't just be interpolated directly.
+      - name: Set lowercase image name
+        id: image
+        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # SSHes into the instance and does a simple pull-and-restart: stop and
+      # remove whatever's currently running under this container name (if
+      # anything), pull the freshly-pushed image, start it again. Port 80 on
+      # the host maps to the container's internal $PORT (8080 by default --
+      # see Dockerfile), so the app is reachable directly at the instance's
+      # public IP with no reverse proxy needed. --restart unless-stopped
+      # brings it back automatically if the instance itself reboots.
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ${{ steps.image.outputs.name }}:latest
+            docker stop healthcare-chatbot 2>/dev/null || true
+            docker rm healthcare-chatbot 2>/dev/null || true
+            docker run -d \
+              --name healthcare-chatbot \
+              --restart unless-stopped \
+              -p 80:8080 \
+              -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
+              ${{ steps.image.outputs.name }}:latest
+            docker image prune -f

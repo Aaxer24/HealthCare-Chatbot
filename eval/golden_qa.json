@@ -1,0 +1,67 @@
+[
+  {
+    "id": "diabetes-symptoms",
+    "question": "What are the common symptoms of type 2 diabetes?",
+    "ground_truth": "Common symptoms of type 2 diabetes include excessive urination, excessive thirst, constant hunger, weight loss, vision changes, and fatigue. It results from the body's ineffective use of insulin, and uncontrolled high blood glucose can, over time, damage the heart, blood vessels, eyes, kidneys, and nerves."
+  },
+  {
+    "id": "hypertension-risk",
+    "question": "Why is high blood pressure dangerous for heart health?",
+    "ground_truth": "High blood pressure makes the heart work harder and weakens it over time. It increases the risk of heart attack, stroke, kidney failure, and congestive heart failure. A blood pressure reading of 140 over 90 or above is considered high."
+  },
+  {
+    "id": "asthma-symptoms",
+    "question": "What are the typical symptoms of asthma?",
+    "ground_truth": "Typical asthma symptoms include recurrent episodes of shortness of breath or wheeze, night cough or cough and wheeze with exercise, and response to bronchodilators. A personal or family history of allergy or asthma supports the diagnosis."
+  },
+  {
+    "id": "pneumonia-symptoms",
+    "question": "What are the symptoms of pneumonia?",
+    "ground_truth": "Signs of pneumonia include fast breathing, difficulty breathing, fever, and chest pain. General danger signs in severe cases include inability to breastfeed or drink, lethargy or unconsciousness, and convulsions. Severe cases can involve low oxygen saturation and severe respiratory distress such as grunting."
+  },
+  {
+    "id": "depression-symptoms",
+    "question": "What are common symptoms of clinical depression?",
+    "ground_truth": "People with depression experience persistent depressed mood or markedly diminished interest and pleasure in activities for at least two weeks. Additional symptoms include disturbed sleep or sleeping too much, significant change in appetite or weight (decrease or increase), and beliefs of worthlessness."
+  },
+  {
+    "id": "common-cold-treatment",
+    "question": "What is the treatment for a common cold?",
+    "ground_truth": "There are no medicines that cure the common cold. Given time, the body's immune system makes antibodies to fight the infection. Treatment is aimed at relieving symptoms while the immune system clears the virus."
+  },
+  {
+    "id": "uti-causes",
+    "question": "What causes urinary tract infections?",
+    "ground_truth": "A urinary tract infection in the bladder is called cystitis, and infection that spreads to the kidney is called pyelonephritis. UTIs are most commonly caused by E. coli or another gram-negative bacterium, with S. saprophyticus being the second most common cause in women."
+  },
+  {
+    "id": "tuberculosis-symptoms",
+    "question": "What are the symptoms of tuberculosis?",
+    "ground_truth": "Tuberculosis is an infectious disease that usually affects the lungs but may also affect other parts of the body. Symptoms include fever, weight loss, and coughing up blood. A cough lasting more than 14 days can also be a presenting sign."
+  },
+  {
+    "id": "folic-acid-anemia-symptoms",
+    "question": "What are the symptoms of folic acid deficiency anemia?",
+    "ground_truth": "Fatigue is often the first sign of folic acid deficiency anemia. Other symptoms include anorexia and reduced production of red blood cells, which lowers the amount of oxygen and nutrients delivered to body tissues."
+  },
+  {
+    "id": "heart-attack-warning-signs",
+    "question": "What are warning signs of a heart attack?",
+    "ground_truth": "Warning signs include shortness of breath, chest heaviness or tightness, pain, a burning sensation, and squeezing or pressure behind the breastbone or in the arms, neck, or jaws. Many people have no prior symptoms of coronary artery disease before a heart attack occurs."
+  },
+  {
+    "id": "migraine-symptoms",
+    "question": "What are the symptoms of a migraine headache?",
+    "ground_truth": "A migraine is a recurring, throbbing, severe headache, often on one side of the head, that can last from 4 to 72 hours. Migraine with aura is linked to a higher risk of stroke, which is an important consideration when prescribing hormonal contraceptives."
+  },
+  {
+    "id": "chronic-kidney-disease-symptoms",
+    "question": "What are the symptoms of chronic kidney disease?",
+    "ground_truth": "Chronic kidney disease symptoms are often not apparent until the disease has progressed significantly. Common symptoms include anemia, because the kidneys produce less erythropoietin (a hormone that stimulates red blood cell production), and bad breath or a bad taste in the mouth from waste products building up in the saliva."
+  },
+  {
+    "id": "allergic-rhinitis-definition",
+    "question": "What is allergic rhinitis?",
+    "ground_truth": "Allergic rhinitis is swelling and inflammation of the nasal membranes caused by sensitivity to airborne matter such as pollen or cat hair."
+  }
+]

@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 .ipynb_checkpoints/
+eval/results/*
+!eval/results/history.csv
+.vscode/
+.claude/
+.pytest_cache/
+docs/

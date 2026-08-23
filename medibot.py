@@ -2,9 +2,9 @@ import uuid
 
 import streamlit as st
 
+from src.api_client import call_chat_api
 from src.config import LOGGER, get_config
-from src.rag import answer_question, render_source_previews
-from src.router import answer_general_chat, answer_out_of_scope, answer_style_instruction, classify_message
+from src.rag import render_source_previews
 from src.ui import (
     format_timestamp,
     render_empty_state,
@@ -67,47 +67,20 @@ def main() -> None:
     if config is None:
         return
 
-    try:
-        message_type = classify_message(prompt, config)
-    except Exception:
-        LOGGER.exception("Failed to classify user message")
-        message_type = "MEDICAL_QUESTION"
-
-    if message_type == "GENERAL_CHAT":
-        with st.spinner("Thinking..."):
-            try:
-                answer = answer_general_chat(prompt, config)
-            except Exception as exc:
-                LOGGER.exception("Failed to answer general message")
-                st.error(f"Unable to generate an answer right now: {exc}")
-                return
-        render_assistant_response(answer)
-        return
-
-    if message_type == "OUT_OF_SCOPE":
-        with st.spinner("Thinking..."):
-            try:
-                answer = answer_out_of_scope(prompt, config)
-            except Exception as exc:
-                LOGGER.exception("Failed to answer out-of-scope message")
-                st.error(f"Unable to generate an answer right now: {exc}")
-                return
-        render_assistant_response(answer)
-        return
-
-    with st.spinner("Searching trusted documents..."):
+    with st.spinner("Thinking..."):
         try:
-            style_instruction = answer_style_instruction(prompt, config)
-            question = f"{prompt}\n\nResponse style instruction: {style_instruction}"
-            answer, sources = answer_question(question, st.session_state.chat_history, config)
+            result = call_chat_api(prompt, st.session_state.chat_history, config)
+            answer = result["answer"]
+            sources = result["sources"]
         except Exception as exc:
-            LOGGER.exception("Failed to answer question")
+            LOGGER.exception("Failed to answer prompt")
             st.error(f"Unable to generate an answer right now: {exc}")
             return
 
     render_assistant_response(answer, sources)
-    st.session_state.chat_history.append((prompt, answer))
-    trim_history()
+    if result["message_type"] == "MEDICAL_QUESTION":
+        st.session_state.chat_history.append((prompt, answer))
+        trim_history()
 
 
 if __name__ == "__main__":

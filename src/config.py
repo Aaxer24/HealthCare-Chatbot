@@ -30,6 +30,7 @@ class AppConfig:
     rerank_k: int
     temperature: float
     enable_reranking: bool
+    api_base_url: str
 
 
 def get_secret(name: str, default: str | None = None) -> str | None:
@@ -61,4 +62,28 @@ def get_config() -> AppConfig | None:
         rerank_k=min(rerank_k, retrieval_k),
         temperature=float(get_secret("MODEL_TEMPERATURE", "0.1") or "0.1"),
         enable_reranking=get_bool_secret("ENABLE_RERANKING", "true"),
+        api_base_url=(get_secret("API_BASE_URL", "http://127.0.0.1:8000") or "http://127.0.0.1:8000").rstrip("/"),
+    )
+
+
+def get_cli_config() -> AppConfig:
+    """Config loader for CLI/non-Streamlit entrypoints (ingestion, evaluation).
+
+    Reads only from the environment/.env (no st.secrets), and raises instead
+    of rendering a Streamlit error, since there is no Streamlit runtime here.
+    """
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise RuntimeError("Missing GROQ_API_KEY. Add it to .env before running this script.")
+
+    retrieval_k = int(os.getenv("RETRIEVAL_K", "8"))
+    rerank_k = int(os.getenv("RERANK_K", "5"))
+    return AppConfig(
+        groq_api_key=groq_api_key,
+        model_name=os.getenv("GROQ_MODEL", DEFAULT_MODEL),
+        retrieval_k=retrieval_k,
+        rerank_k=min(rerank_k, retrieval_k),
+        temperature=float(os.getenv("MODEL_TEMPERATURE", "0.1")),
+        enable_reranking=os.getenv("ENABLE_RERANKING", "true").lower() in {"1", "true", "yes", "on"},
+        api_base_url=os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/"),
     )

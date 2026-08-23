@@ -1,0 +1,8 @@
+[project]
+name = "healthcare-chatbot"
+version = "1.0.0"
+description = "RAG-based medical information chatbot over trusted PDFs, served with Streamlit and Groq."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

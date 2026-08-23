@@ -1,0 +1,21 @@
+venv/
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+.env
+.env.example
+
+# Raw source PDFs are not needed at runtime -- only the pre-built FAISS
+# index (vectorstore/) is. Keeps the build context small and avoids
+# shipping the source documents inside the runtime image.
+data/
+
+# Generated locally, not part of the image
+eval/results/
+docx_render/
+
+tests/
+README.md

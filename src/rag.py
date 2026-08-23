@@ -1,5 +1,6 @@
 import json
 import html
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -46,7 +47,7 @@ class RerankingRetriever(BaseRetriever):
         return reranked_docs
 
 
-@st.cache_resource(show_spinner=False)
+@lru_cache(maxsize=1)
 def get_embedding_model() -> HuggingFaceEmbeddings:
     return HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL,
@@ -54,7 +55,7 @@ def get_embedding_model() -> HuggingFaceEmbeddings:
     )
 
 
-@st.cache_resource(show_spinner=False)
+@lru_cache(maxsize=1)
 def get_vectorstore() -> FAISS:
     if not DB_FAISS_PATH.exists():
         raise FileNotFoundError(
@@ -79,12 +80,12 @@ def get_vectorstore() -> FAISS:
     )
 
 
-@st.cache_resource(show_spinner=False)
+@lru_cache(maxsize=1)
 def get_reranker() -> CrossEncoder:
     return CrossEncoder(RERANKER_MODEL)
 
 
-@st.cache_resource(show_spinner=False)
+@lru_cache(maxsize=8)
 def get_llm(model_name: str, groq_api_key: str, temperature: float) -> ChatGroq:
     return ChatGroq(
         model_name=model_name,

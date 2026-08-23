@@ -19,18 +19,34 @@ An interactive healthcare chatbot that uses retrieval-augmented generation over 
 
 ```text
 .
-|-- data/                       # Source medical PDFs
-|-- vectorstore/db_faiss/        # Generated FAISS index
+|-- data/                       # Source medical PDFs (not shipped in the Docker image)
+|-- eval/
+|   |-- golden_qa.json           # Curated question/reference-answer set
+|   `-- results/                 # Generated evaluation output (gitignored, history.csv tracked)
+|-- vectorstore/db_faiss/        # Generated FAISS index (baked into the Docker image)
 |-- src/
 |   |-- config.py                # Settings, paths, environment variables
 |   |-- prompts.py               # RAG, routing, and style prompts
-|   |-- rag.py                   # Embeddings, FAISS, reranking, citations
-|   |-- router.py                # General-chat and answer-depth routing
+|   |-- ingest.py                # PDF loading, chunking, vector store building
+|   |-- rag.py                   # Embeddings, FAISS, reranking, citations, the RAG chain
+|   |-- router.py                # General-chat / out-of-scope / answer-depth routing
+|   |-- service.py               # Shared business logic: routes a prompt to the right answer path
+|   |-- api.py                   # FastAPI backend exposing /health and /chat
+|   |-- api_client.py            # Thin HTTP client medibot.py uses to call the API
+|   |-- startup_checks.py        # Fail-fast checks (API key, vector store present) on container start
 |   `-- ui.py                    # Streamlit styling and UI helpers
-|-- create_memory_for_llm.py     # Builds the vector store from PDFs
-|-- create_memory_with_llm.py    # CLI smoke test for the RAG pipeline
-|-- medibot.py                   # Streamlit entrypoint
+|-- tests/                       # pytest suite (config, ingest, rag, router, service, api)
+|-- docker/entrypoint.sh         # Starts the API, waits for it, then runs Streamlit
+|-- .github/workflows/ci.yml     # Test -> build -> push to GHCR -> SSH-deploy to EC2
+|-- create_memory_for_llm.py     # CLI wrapper: builds the vector store from PDFs
+|-- create_memory_with_llm.py    # CLI smoke test for the raw RAG pipeline (no API/routing)
+|-- evaluate_chatbot.py          # RAGAS evaluation of the live RAG pipeline
+|-- medibot.py                   # Streamlit entrypoint (UI only; calls the API)
+|-- Dockerfile                   # Single container: API + Streamlit together (see Containerization)
+|-- pyproject.toml                # Project metadata, pytest config
 |-- requirements.txt
+|-- requirements-eval.txt        # Extra deps for evaluate_chatbot.py
+|-- requirements-dev.txt         # Extra deps for the test suite
 `-- .env.example
 ```
 
@@ -71,6 +87,130 @@ Rebuild is required after changing PDFs or changing the embedding model.
 .\venv\python.exe -m streamlit run medibot.py
 ```
 
+If you want the Streamlit UI to use the FastAPI backend locally, start the API first:
+
+```powershell
+.\venv\python.exe -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+```
+
+Then in another terminal run:
+
+```powershell
+set API_BASE_URL=http://127.0.0.1:8000
+.\venv\python.exe -m streamlit run medibot.py
+```
+
+## Containerization
+
+The image runs **both** the FastAPI backend and the Streamlit UI inside a single container --
+`docker/entrypoint.sh` starts the API on an internal-only port (`127.0.0.1:8000`), waits for it
+to become healthy, then runs Streamlit in the foreground on the port the container publishes
+(`$PORT`, defaulting to `8080`). There's no separate `api` container or reverse proxy to wire up
+-- on EC2 this means `docker run -p 80:8080 ...` is all that's needed to serve it publicly.
+
+The FastAPI backend's startup also pre-warms the embedding model, reranker, and FAISS index
+(rather than lazily loading them on the first chat request) -- see `src/api.py`. This mainly
+matters on scale-to-zero platforms (a cold start resolves during the container's own
+startup/readiness window instead of a real user's first message eating a 15-30s delay), but is
+harmless and still worth keeping on an always-on EC2 instance too -- it just means the container
+takes a few seconds longer to report healthy after each restart, in exchange for consistent
+first-request latency.
+
+Build and run it locally:
+
+```powershell
+docker build -t healthcare-chatbot .
+docker run --rm -p 8080:8080 --env-file .env healthcare-chatbot
+```
+
+Open `http://localhost:8080`.
+
+The image:
+
+- runs as a non-root user
+- preloads embedding and reranker weights at build time (only Groq's API is needed at runtime, not Hugging Face Hub)
+- performs startup validation for `GROQ_API_KEY` and the vector store files before serving traffic
+- exposes a health check on `/_stcore/health`
+
+### FastAPI backend
+
+`src/api.py` exposes the same RAG/routing logic Streamlit uses, as a REST API on the internal
+port:
+
+- `POST /chat`
+- `GET /health`
+
+```json
+{
+  "prompt": "What is anemia?",
+  "chat_history": [
+    {"role": "user", "content": "Explain iron deficiency"},
+    {"role": "assistant", "content": "Iron deficiency is ..."}
+  ]
+}
+```
+
+Streamlit talks to it over HTTP via `API_BASE_URL` (defaults to `http://127.0.0.1:8000`, correct
+for the single-container setup) instead of calling the RAG service directly in-process --
+see `src/api_client.py`.
+
+## Deployment: AWS EC2
+
+One-time setup, before the CI/CD pipeline can deploy:
+
+1. Launch an EC2 instance -- Ubuntu Server LTS, `t3.small` or larger. 2GB+ RAM matters here:
+   PyTorch, the embedding model, the cross-encoder reranker, and the FAISS index routinely use
+   500MB-1GB+ together, which doesn't leave enough headroom on a 1GB `t3.micro` without adding
+   swap space. Security group needs inbound `22` (SSH) and `80` (HTTP) allowed.
+2. Install Docker on it:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y ca-certificates curl git
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+   echo \
+     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   sudo apt-get update
+   sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+   sudo usermod -aG docker $USER
+   ```
+3. Add four repo secrets (Settings -> Secrets and variables -> Actions):
+
+| Secret | Value |
+| --- | --- |
+| `EC2_HOST` | The instance's public IP |
+| `EC2_USER` | `ubuntu` (or `ec2-user` for Amazon Linux) |
+| `EC2_SSH_KEY` | The full contents of the instance's private key (`.pem`) |
+| `GROQ_API_KEY` | Your Groq API key -- passed through to the running container |
+
+Once those are set, push to `main` and CI/CD (below) builds and deploys automatically. To deploy
+manually instead (from the instance itself, or over SSH):
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+docker stop healthcare-chatbot 2>/dev/null || true
+docker rm healthcare-chatbot 2>/dev/null || true
+docker run -d --name healthcare-chatbot --restart unless-stopped \
+  -p 80:8080 -e GROQ_API_KEY=<your-key> ghcr.io/<owner>/<repo>:latest
+```
+
+The image doesn't go to a paid registry -- it's pushed to GitHub Container Registry (GHCR), which
+authenticates with the workflow's own built-in token, no extra account or secret needed for that
+part.
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`:
+
+1. **`test`** -- installs dependencies, runs the full pytest suite. Gates everything below.
+2. **`build-and-deploy`** (push to `main` only, after tests pass) -- verifies the vector store is
+   actually committed (the image bakes in whatever's committed, it doesn't rebuild it), builds
+   the Docker image, pushes it to GHCR, then SSHes into the EC2 instance to pull the new image
+   and restart the container.
+
 ## Configuration
 
 These values can be set in `.env` or Streamlit secrets.
@@ -83,7 +223,39 @@ These values can be set in `.env` or Streamlit secrets.
 | `RETRIEVAL_K` | Initial retrieved chunks before reranking | `8` |
 | `RERANK_K` | Final chunks after reranking | `5` |
 | `ENABLE_RERANKING` | Enable cross-encoder reranking | `true` |
+| `API_BASE_URL` | FastAPI base URL used by Streamlit | `http://127.0.0.1:8000` |
 | `LOG_LEVEL` | Python logging level | `INFO` |
+
+## Evaluation
+
+`evaluate_chatbot.py` runs the golden question set in `eval/golden_qa.json` through the
+*actual* production RAG pipeline (same retrieval, reranking, and prompts as the live app)
+and scores the results with [RAGAS](https://github.com/explodinggradients/ragas), using
+Groq as the judge LLM and the same BGE embeddings as retrieval.
+
+Metrics:
+
+| Metric | What it measures |
+| --- | --- |
+| `faithfulness` | Whether every claim in the answer is supported by the retrieved context (hallucination check) |
+| `answer_relevancy` | Whether the answer actually addresses the question asked |
+| `context_precision` | Whether the retrieved chunks are relevant, ranked with the most useful ones first |
+| `context_recall` | Whether the retrieved chunks contain everything needed to support the reference answer |
+
+Setup and run:
+
+```powershell
+.\venv\python.exe -m pip install -r requirements.txt -r requirements-eval.txt
+.\venv\python.exe evaluate_chatbot.py
+```
+
+Results are written to `eval/results/results.csv` (per-question scores) and
+`eval/results/summary.json` (mean scores), and a summary table prints to the console.
+
+To evaluate a different question set, pass `--dataset path/to/file.json` with the same
+`question` / `ground_truth` schema as `eval/golden_qa.json`. Re-run after any change to
+chunking, retrieval parameters, prompts, or the embedding/reranker model to catch
+regressions before they reach users.
 
 ## Medical Safety
 
