@@ -12,8 +12,10 @@ An interactive healthcare chatbot that uses retrieval-augmented generation over 
 - Medical safety prompt with emergency-care guidance and uncertainty handling
 - Source previews showing document names, pages, relevance scores, and snippets
 - General-chat router so greetings and capability questions do not search PDFs
-- Feedback buttons for answer quality collection
-- Modular code structure for easier maintenance and deployment
+- Modular architecture: FastAPI backend + Streamlit UI, decoupled over HTTP
+- Automated RAGAS evaluation pipeline (faithfulness, relevancy, context precision/recall)
+- 27-test pytest suite covering config, ingestion, retrieval, routing, service, and API layers
+- Dockerized as a single container, with CI/CD (GitHub Actions) building and deploying to AWS EC2 on every push
 
 ## Project Structure
 
@@ -218,7 +220,7 @@ These values can be set in `.env` or Streamlit secrets.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `GROQ_API_KEY` | Groq API key | Required |
-| `GROQ_MODEL` | Chat model | `llama-3.3-70b-versatile` |
+| `GROQ_MODEL` | Chat model | `openai/gpt-oss-120b` |
 | `MODEL_TEMPERATURE` | Response randomness | `0.1` |
 | `RETRIEVAL_K` | Initial retrieved chunks before reranking | `8` |
 | `RERANK_K` | Final chunks after reranking | `5` |
@@ -260,9 +262,3 @@ regressions before they reach users.
 ## Medical Safety
 
 This chatbot is for educational information only. It does not diagnose conditions, prescribe treatment, or replace a licensed clinician. The prompt instructs the model to recommend urgent local care for emergency warning signs and to say when the documents do not support an answer.
-
-## Resume Highlights
-
-- Developed an interactive medical chatbot using RAG over trusted medical PDFs, providing symptom-based guidance with source citations and snippet previews.
-- Improved answer grounding with BGE embeddings, MMR retrieval, cross-encoder reranking, follow-up question rewriting, and source attribution.
-- Built a real-time Streamlit conversational interface integrated with Groq, general-chat routing, answer-depth routing, and feedback collection.

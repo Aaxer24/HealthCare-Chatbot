@@ -4,7 +4,7 @@ from src.config import AppConfig
 def make_config(**overrides) -> AppConfig:
     defaults = dict(
         groq_api_key="test-key",
-        model_name="llama-3.3-70b-versatile",
+        model_name="openai/gpt-oss-120b",
         retrieval_k=8,
         rerank_k=5,
         temperature=0.1,
