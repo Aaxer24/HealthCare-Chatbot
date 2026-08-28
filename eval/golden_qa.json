@@ -63,5 +63,95 @@
     "id": "allergic-rhinitis-definition",
     "question": "What is allergic rhinitis?",
     "ground_truth": "Allergic rhinitis is swelling and inflammation of the nasal membranes caused by sensitivity to airborne matter such as pollen or cat hair."
+  },
+  {
+    "id": "cataracts-symptoms",
+    "question": "What are the symptoms of cataracts?",
+    "ground_truth": "Common symptoms of cataracts include gradual, painless blurry, filmy, or fuzzy vision, poor central vision, frequent changes in eyeglass prescription, changes in color vision, increased glare from lights (especially oncoming headlights at night), and a milky whiteness in the pupil. Aging is the most common cause, with at least 70% of people over age 70 affected."
+  },
+  {
+    "id": "carpal-tunnel-syndrome",
+    "question": "What is carpal tunnel syndrome and what causes it?",
+    "ground_truth": "Carpal tunnel syndrome is a disorder caused by compression of the median nerve at the wrist, causing numbness and tingling in the hand. Swelling or pressure in the narrow carpal tunnel is the underlying mechanism, and pregnancy, obesity, arthritis, thyroid conditions, diabetes, and repetitive wrist motions all predispose to it. Women between the ages of 30 and 60 have the highest rates."
+  },
+  {
+    "id": "celiac-disease-causes",
+    "question": "What causes celiac disease?",
+    "ground_truth": "Celiac disease has a genetic basis with a multifactorial inheritance pattern: a person must have a genetic predisposition, and an environmental trigger such as surgery, a diet change, pregnancy, childbirth, severe stress, or a viral infection activates the immune system. When gluten reaches the small intestine, the immune system attacks gliadin in the gluten, damaging the intestinal villi and impairing nutrient absorption."
+  },
+  {
+    "id": "lactose-intolerance-causes",
+    "question": "What causes lactose intolerance?",
+    "ground_truth": "Lactose intolerance is caused by a deficiency of the enzyme lactase, which is needed to break down lactose (milk sugar) into simple sugars the intestine can absorb. It is the most common carbohydrate intolerance, affecting an estimated 30-50 million Americans, with much higher rates among African American, Jewish American, Mexican American, and Native American populations (about 75%) and Asian Americans (about 90%) than among people of Northern European descent."
+  },
+  {
+    "id": "carbon-monoxide-poisoning",
+    "question": "How does carbon monoxide poisoning affect the body?",
+    "ground_truth": "Carbon monoxide (CO) is a colorless, odorless, poisonous gas produced by incomplete combustion, such as from car exhaust, faulty stoves and heaters, fires, and cigarette smoke. CO competes with oxygen to bind hemoglobin in red blood cells and is accepted by hemoglobin over 200 times more readily than oxygen, forming carboxyhemoglobin. This interferes with the blood's ability to carry oxygen, causing headache, nausea, and convulsions, and can lead to death by asphyxiation."
+  },
+  {
+    "id": "cervical-cancer-cause",
+    "question": "What is the main cause of cervical cancer?",
+    "ground_truth": "Infection with human papilloma virus (HPV) causes approximately 90% of all cervical cancers. Of the more than 80 types of HPV, about 30 can be sexually transmitted, and the HPV-16 strain alone is thought to cause about 50% of cervical cancers, though most women with HPV do not develop cervical cancer. Most women have no symptoms of cervical cancer until it becomes invasive, at which point symptoms may include unusual vaginal discharge."
+  },
+  {
+    "id": "chickenpox-transmission",
+    "question": "What is chickenpox and how is it spread?",
+    "ground_truth": "Chickenpox (varicella) is a common, extremely infectious childhood disease caused by the varicella-zoster virus, spread through the air or by direct contact with an infected person. It produces an itchy, blistery rash that typically lasts about a week, sometimes with fever. After an incubation period of 10-21 days, infected people can spread the disease from one to two days before the rash appears until all blisters have scabbed over. A single infection almost always confers lifelong immunity."
+  },
+  {
+    "id": "cholecystitis-gallstones",
+    "question": "What causes cholecystitis?",
+    "ground_truth": "In about 95% of cases, cholecystitis (painful inflammation of the gallbladder) is caused by gallstones blocking the duct that carries bile out of the gallbladder. Gallstones are solid accumulations of bile components, particularly cholesterol, bile pigments, and calcium; when a stone blocks the duct, bile accumulates and the gallbladder wall becomes damaged from lack of blood flow. Gallstone formation is about twice as common in women as men, and is more common in pregnant women, those on birth control pills or estrogen therapy, and people who are overweight or lose weight quickly."
+  },
+  {
+    "id": "cholera-transmission",
+    "question": "How is cholera transmitted and what are its symptoms?",
+    "ground_truth": "Cholera is caused by Vibrio cholerae bacteria that survive stomach acid in sufficient numbers to infect the intestines after ingestion of contaminated food or water. The bacteria produce a toxin that causes large volumes of water and electrolytes to be secreted into the bowels, resulting in watery diarrhea and often vomiting, appearing one to three days after exposure. Most cases are mild, but about one in 20 patients experiences severe, potentially life-threatening dehydration, with fluid loss through diarrhea and vomiting of up to one quart per hour in severe cases."
+  },
+  {
+    "id": "chronic-fatigue-syndrome-causes",
+    "question": "What is known about the causes of chronic fatigue syndrome?",
+    "ground_truth": "There is no single known cause of chronic fatigue syndrome (CFS). Studied contributing factors include viral infections, chemical toxins, allergies, immune abnormalities, and psychological disorders. Many researchers think CFS may not be a single illness but a group of symptoms caused by several conditions, with one theory suggesting a virus or chemical injures the body and reactivates dormant herpes-family viruses, causing the immune system to overreact. Most patients diagnosed are 25-45 years old, and about 80% of cases are in women."
+  },
+  {
+    "id": "cluster-headache-symptoms",
+    "question": "What triggers cluster headaches and what do they feel like?",
+    "ground_truth": "Cluster headaches are triggered by biochemical, hormonal, and vascular changes, though the underlying cause is unclear. Alcohol, tobacco, histamine, stress, and decreased blood oxygen levels (especially during sleep) can act as triggers. The primary symptom is excruciating one-sided head pain centered behind an eye or near the temple, sometimes radiating to the mouth and teeth, along with eye tearing, nasal congestion, a runny nose, pupil contraction, and facial drooping or flushing on the same side as the pain. Cluster headaches predominantly affect men, about 80% of sufferers."
+  },
+  {
+    "id": "infant-colic",
+    "question": "What is infant colic and what might cause it?",
+    "ground_truth": "Colic is persistent, unexplained crying in an otherwise healthy baby between two weeks and five months of age, affecting 10-20% of infants. It is not a disease, and no one knows exactly what causes it, but possible contributing factors include swallowing large amounts of air that becomes trapped in the digestive tract, digestive tract immaturity, food intolerances, hunger or overfeeding, lack of sleep, and overstimulation. Symptoms typically peak around three months of age and disappear within the following eight weeks."
+  },
+  {
+    "id": "copd-emphysema-causes",
+    "question": "What is emphysema and what causes it?",
+    "ground_truth": "Emphysema is a chronic obstructive pulmonary disease (COPD) in which cigarette smoke causes overproduction of the enzyme elastase, leading to irreversible destruction of elastin, a protein that maintains the structure of the alveoli walls. As alveoli walls rupture, their number is reduced and the remaining ones become enlarged, making the lungs less elastic and overinflated, so airways collapse during exhalation and trap stale air. Cigarette smoking is the most important risk factor for COPD, accounting for about 80% of cases; other risk factors include air pollution, industrial dusts and fumes, older age, and family history."
+  },
+  {
+    "id": "high-cholesterol-ldl-hdl",
+    "question": "What is the difference between LDL and HDL cholesterol?",
+    "ground_truth": "LDL (low-density lipoprotein) is often called 'bad cholesterol' because high LDL is a major contributing factor to heart disease: it forms plaque in the heart's blood vessels, restricting blood supply and causing atherosclerosis, which can lead to a heart attack. HDL (high-density lipoprotein) is called 'good cholesterol'; low HDL, along with high triglycerides, is also a risk factor for atherosclerosis. There are usually no apparent symptoms of high cholesterol - it is diagnosed through a blood test, though obesity and a high-fat diet are general indicators."
+  },
+  {
+    "id": "cardiac-tamponade",
+    "question": "What is cardiac tamponade?",
+    "ground_truth": "Cardiac tamponade occurs when the heart is squeezed by fluid that collects inside the pericardium, the sac surrounding the heart. The fluid pressure prevents the heart's lower chambers (ventricles) from filling properly with blood, so less blood reaches the lungs and the rest of the body - a serious, potentially fatal condition if untreated. It can be caused by kidney failure, pericardial swelling from infection or cancer, blunt or penetrating chest trauma, or as a complication of heart surgery."
+  },
+  {
+    "id": "cat-scratch-disease",
+    "question": "What are the symptoms of cat-scratch disease?",
+    "ground_truth": "Cat-scratch disease is caused by the bacterium Bartonella henselae, transmitted to people through a scratch, bite, or lick from an infected cat; it cannot spread from person to person. The first sign is usually a small blister at the site of the scratch three to 10 days after injury, followed within two weeks by swollen lymph nodes near the site, often with fever, fatigue, or headache. Symptoms usually resolve within a month, though swollen lymph nodes can persist for several months. Children and teenagers are the most common victims."
+  },
+  {
+    "id": "campylobacteriosis",
+    "question": "What causes campylobacteriosis and how does it spread?",
+    "ground_truth": "Campylobacteriosis is an infection by Campylobacter bacteria, most commonly causing diarrhea, mainly in children and younger adults. It is most often spread through improper or incomplete food preparation, with poultry accounting for over half of cases; untreated water and raw milk are other sources. After an incubation period of one to 10 days, symptoms begin with a day or two of mild fever, muscle aches, and headache, followed by diarrhea (with or without blood) and severe abdominal cramps; the illness usually lasts about a week."
+  },
+  {
+    "id": "cellulitis-causes",
+    "question": "What causes cellulitis and what are its symptoms?",
+    "ground_truth": "Cellulitis is most often caused by Streptococcus pyogenes or Staphylococcus aureus bacteria and most commonly occurs on the face, neck, and legs. Orbital cellulitis, a serious form affecting tissue around the eye, most often spreads from an infection in the sinuses or upper respiratory tract and causes redness, swollen eyelids, severe pain, and bulging of the eye; it can lead to temporary vision loss, blindness, brain abscesses, or meningitis if untreated. An untreated cellulitis infection can also spread to the lymphatic system, lymph nodes, bloodstream, or deeper tissues."
   }
 ]

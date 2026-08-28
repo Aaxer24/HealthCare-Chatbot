@@ -21,6 +21,16 @@ MAX_HISTORY_TURNS = 6
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 LOGGER = logging.getLogger("medical_chatbot")
 
+# LangSmith tracing is picked up by LangChain automatically from these env
+# vars (LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT) -- no
+# code wiring needed beyond setting a default project name and logging
+# whether it's active, so a misconfigured key doesn't fail silently.
+os.environ.setdefault("LANGCHAIN_PROJECT", "healthcare-chatbot")
+if os.getenv("LANGCHAIN_TRACING_V2", "").lower() in {"1", "true", "yes", "on"} and not os.getenv("LANGCHAIN_API_KEY"):
+    LOGGER.warning("LANGCHAIN_TRACING_V2 is enabled but LANGCHAIN_API_KEY is not set; LangSmith tracing will fail silently.")
+elif os.getenv("LANGCHAIN_TRACING_V2", "").lower() in {"1", "true", "yes", "on"}:
+    LOGGER.info("LangSmith tracing enabled for project '%s'.", os.environ["LANGCHAIN_PROJECT"])
+
 
 @dataclass(frozen=True)
 class AppConfig:

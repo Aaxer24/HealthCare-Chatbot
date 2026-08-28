@@ -1,0 +1,58 @@
+"""Fail (exit 1) if any RAGAS mean score in a summary.json drops below its floor.
+
+Used as a CI regression gate after evaluate_chatbot.py -- these floors catch a
+badly broken pipeline (bad prompt, broken retrieval, wrong model), they are
+not a quality target. Run evaluate_chatbot.py locally against the full golden
+set to actually improve scores; this just stops a regression from shipping.
+"""
+import argparse
+import json
+import sys
+from pathlib import Path
+
+DEFAULT_THRESHOLDS = {
+    "faithfulness": 0.6,
+    "answer_relevancy": 0.6,
+    "context_precision": 0.5,
+    "context_recall": 0.5,
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Check RAGAS summary.json scores against minimum thresholds.")
+    parser.add_argument("summary", type=Path, help="Path to summary.json produced by evaluate_chatbot.py")
+    for metric, default in DEFAULT_THRESHOLDS.items():
+        parser.add_argument(f"--min-{metric.replace('_', '-')}", type=float, default=default)
+    args = parser.parse_args()
+
+    if not args.summary.exists():
+        sys.exit(f"Summary file not found: {args.summary}")
+
+    data = json.loads(args.summary.read_text(encoding="utf-8"))
+    mean = data.get("mean", {})
+
+    failures = []
+    print("=== Eval-gate thresholds ===")
+    for metric in DEFAULT_THRESHOLDS:
+        threshold = getattr(args, f"min_{metric}")
+        score = mean.get(metric)
+        if score is None:
+            failures.append(f"{metric}: missing from summary.json")
+            print(f"{metric:20s}: MISSING")
+            continue
+        status = "OK" if score >= threshold else "FAIL"
+        print(f"{metric:20s}: {score:.3f}  (min {threshold:.2f})  {status}")
+        if score < threshold:
+            failures.append(f"{metric}: {score:.3f} < {threshold:.2f}")
+
+    if failures:
+        print("\nEval gate failed:")
+        for failure in failures:
+            print(f"  - {failure}")
+        sys.exit(1)
+
+    print("\nEval gate passed.")
+
+
+if __name__ == "__main__":
+    main()

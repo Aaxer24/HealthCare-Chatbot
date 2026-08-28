@@ -34,11 +34,14 @@ jobs:
   # One-time setup required before this job can succeed:
   #   1. An EC2 instance (Ubuntu) with Docker installed -- see README.
   #   2. Its security group allows inbound 22 (SSH) and 80 (HTTP).
-  #   3. Four repo secrets (Settings -> Secrets and variables -> Actions):
-  #        EC2_HOST      -- the instance's public IP
-  #        EC2_USER      -- ubuntu (or ec2-user for Amazon Linux)
-  #        EC2_SSH_KEY   -- the full contents of the instance's private key
-  #        GROQ_API_KEY  -- passed through to the running container
+  #   3. Six repo secrets (Settings -> Secrets and variables -> Actions):
+  #        EC2_HOST              -- the instance's public IP
+  #        EC2_USER              -- ubuntu (or ec2-user for Amazon Linux)
+  #        EC2_SSH_KEY           -- the full contents of the instance's private key
+  #        GROQ_API_KEY          -- passed through to the running container, and used
+  #                                 by the eval-gate step below to call the live model
+  #        AWS_ACCESS_KEY_ID     -- for the DVC S3 remote (data/vectorstore versioning)
+  #        AWS_SECRET_ACCESS_KEY -- see README (Data & Experiment Versioning) for scoping options
   build-and-deploy:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -46,16 +49,48 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ap-south-1
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify the vector store is committed
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies (app + eval + dvc)
         run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+          pip install -r requirements-eval.txt
+          pip install "dvc[s3]"
+
+      # The vectorstore is DVC-tracked (see data.dvc / vectorstore/db_faiss.dvc),
+      # not committed to git directly -- pull the real index bytes from the S3
+      # remote before the eval-gate and the Docker build both need them.
+      - name: Pull vector store from DVC remote
+        run: |
+          dvc pull vectorstore/db_faiss
           if [ ! -f vectorstore/db_faiss/index.faiss ]; then
-            echo "::error::vectorstore/db_faiss/index.faiss is missing from this commit."
-            echo "::error::Rebuild it locally (python create_memory_for_llm.py) and commit vectorstore/ before pushing -- the Docker image bakes in whatever is committed, it does not regenerate it at build time."
+            echo "::error::vectorstore/db_faiss/index.faiss is missing after dvc pull."
+            echo "::error::Rebuild it locally (python create_memory_for_llm.py), then 'dvc add vectorstore/db_faiss && dvc push' before pushing -- the Docker image bakes in whatever dvc pull retrieves, it does not regenerate it at build time."
             exit 1
           fi
+
+      # Regression gate: run a fast subset of the golden set through the live
+      # pipeline and fail the build if quality drops below the floor in
+      # eval/check_thresholds.py. --limit keeps this fast and within Groq's
+      # free-tier rate limits; run the full golden set locally for real
+      # tuning (see eval/results/history.csv and MLflow for that history).
+      - name: RAGAS eval-gate
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python evaluate_chatbot.py --limit 12
+          python eval/check_thresholds.py eval/results/summary.json
 
       # GHCR image names must be lowercase; the GitHub repo/owner name here
       # has uppercase letters, so this can't just be interpolated directly.

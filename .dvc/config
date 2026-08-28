@@ -1,0 +1,5 @@
+[core]
+    remote = s3remote
+['remote "s3remote"']
+    url = s3://healthcare-chatbot-dvc-280648354948/dvcstore
+    region = ap-south-1

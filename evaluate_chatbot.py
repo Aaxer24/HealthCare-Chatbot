@@ -8,6 +8,7 @@ import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
+import mlflow
 from dotenv import find_dotenv, load_dotenv
 from groq import RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
@@ -39,12 +40,13 @@ from ragas.run_config import RunConfig
 # per retrieved chunk.
 METRIC_MAX_RETRIES = 2
 
-from src.config import DB_FAISS_PATH, AppConfig, get_cli_config
+from src.config import DB_FAISS_PATH, VECTORSTORE_METADATA_PATH, AppConfig, get_cli_config
 from src.rag import build_chain, get_embedding_model, get_llm
 
 DEFAULT_DATASET_PATH = Path(__file__).parent / "eval" / "golden_qa.json"
 DEFAULT_RESULTS_DIR = Path(__file__).parent / "eval" / "results"
 METRIC_NAMES = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+MLFLOW_EXPERIMENT_NAME = "healthcare-chatbot-rag-eval"
 
 
 def get_git_commit() -> str:
@@ -159,58 +161,86 @@ def main():
     if args.limit is not None:
         golden = golden[: args.limit]
 
-    print(f"Running {len(golden)} golden questions through the live RAG pipeline...")
-    samples = run_pipeline(config, golden)
+    vectorstore_metadata = {}
+    if VECTORSTORE_METADATA_PATH.exists():
+        vectorstore_metadata = json.loads(VECTORSTORE_METADATA_PATH.read_text(encoding="utf-8"))
 
-    judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+    with mlflow.start_run(run_name=f"{get_git_commit()}-{args.dataset.stem}"):
+        mlflow.log_params(
+            {
+                "git_commit": get_git_commit(),
+                "dataset": args.dataset.name,
+                "dataset_size": len(golden),
+                "model_name": config.model_name,
+                "temperature": config.temperature,
+                "retrieval_k": config.retrieval_k,
+                "rerank_k": config.rerank_k,
+                "enable_reranking": config.enable_reranking,
+                "embedding_model": vectorstore_metadata.get("embedding_model"),
+                "chunk_size": vectorstore_metadata.get("chunk_size"),
+                "chunk_overlap": vectorstore_metadata.get("chunk_overlap"),
+            }
+        )
 
-    print("Scoring with RAGAS (faithfulness, answer relevancy, context precision, context recall)...")
-    metrics = [
-        Faithfulness(max_retries=METRIC_MAX_RETRIES),
-        # strictness (default 3) makes ragas request n=3 completions in a
-        # single call; Groq's API rejects any n > 1 with a 400, which silently
-        # became a NaN for this metric on almost every question. strictness=1
-        # avoids the unsupported parameter entirely.
-        AnswerRelevancy(strictness=1),
-        ContextPrecision(max_retries=METRIC_MAX_RETRIES),
-        ContextRecall(max_retries=METRIC_MAX_RETRIES),
-    ]
-    result = evaluate(
-        dataset=EvaluationDataset(samples=samples),
-        metrics=metrics,
-        llm=LangchainLLMWrapper(judge_llm),
-        embeddings=LangchainEmbeddingsWrapper(get_embedding_model()),
-        # Serialize + back off generously: ragas's default max_workers=16 would
-        # fire concurrent judge calls and blow through Groq's free-tier 12K
-        # tokens-per-minute cap almost immediately.
-        run_config=RunConfig(max_workers=1, max_retries=10, max_wait=90),
-    )
+        print(f"Running {len(golden)} golden questions through the live RAG pipeline...")
+        samples = run_pipeline(config, golden)
 
-    df = result.to_pandas()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    df.to_csv(args.output_dir / "results.csv", index=False)
+        judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0)
 
-    summary = {metric: float(df[metric].mean(skipna=True)) for metric in METRIC_NAMES if metric in df.columns}
-    sample_counts = {metric: int(df[metric].notna().sum()) for metric in METRIC_NAMES if metric in df.columns}
-    (args.output_dir / "summary.json").write_text(
-        json.dumps({"mean": summary, "scored_of_total": {k: f"{v}/{len(df)}" for k, v in sample_counts.items()}}, indent=2),
-        encoding="utf-8",
-    )
-    history_path = append_history(args.output_dir, config, summary, args.dataset)
+        print("Scoring with RAGAS (faithfulness, answer relevancy, context precision, context recall)...")
+        metrics = [
+            Faithfulness(max_retries=METRIC_MAX_RETRIES),
+            # strictness (default 3) makes ragas request n=3 completions in a
+            # single call; Groq's API rejects any n > 1 with a 400, which silently
+            # became a NaN for this metric on almost every question. strictness=1
+            # avoids the unsupported parameter entirely.
+            AnswerRelevancy(strictness=1),
+            ContextPrecision(max_retries=METRIC_MAX_RETRIES),
+            ContextRecall(max_retries=METRIC_MAX_RETRIES),
+        ]
+        result = evaluate(
+            dataset=EvaluationDataset(samples=samples),
+            metrics=metrics,
+            llm=LangchainLLMWrapper(judge_llm),
+            embeddings=LangchainEmbeddingsWrapper(get_embedding_model()),
+            # Serialize + back off generously: ragas's default max_workers=16 would
+            # fire concurrent judge calls and blow through Groq's free-tier 12K
+            # tokens-per-minute cap almost immediately.
+            run_config=RunConfig(max_workers=1, max_retries=10, max_wait=90),
+        )
 
-    print("\n=== Per-question scores ===")
-    score_columns = [m for m in METRIC_NAMES if m in df.columns]
-    print(df[["user_input", *score_columns]].to_string(index=False))
+        df = result.to_pandas()
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(args.output_dir / "results.csv", index=False)
 
-    print("\n=== Mean scores ===")
-    for metric, value in summary.items():
-        n = sample_counts[metric]
-        flag = "  <-- based on a small sample, treat with caution" if n < len(df) * 0.7 else ""
-        print(f"{metric:20s}: {value:.3f}  (scored {n}/{len(df)} questions){flag}")
+        summary = {metric: float(df[metric].mean(skipna=True)) for metric in METRIC_NAMES if metric in df.columns}
+        sample_counts = {metric: int(df[metric].notna().sum()) for metric in METRIC_NAMES if metric in df.columns}
+        (args.output_dir / "summary.json").write_text(
+            json.dumps({"mean": summary, "scored_of_total": {k: f"{v}/{len(df)}" for k, v in sample_counts.items()}}, indent=2),
+            encoding="utf-8",
+        )
+        history_path = append_history(args.output_dir, config, summary, args.dataset)
 
-    print(f"\nSaved detailed results to {args.output_dir / 'results.csv'}")
-    print(f"Saved summary to {args.output_dir / 'summary.json'}")
-    print(f"Appended run to {history_path}")
+        mlflow.log_metrics({metric: value for metric, value in summary.items() if value == value})  # skip NaN
+        mlflow.log_metrics({f"{metric}_sample_count": count for metric, count in sample_counts.items()})
+        mlflow.log_artifact(str(args.output_dir / "results.csv"))
+        mlflow.log_artifact(str(args.output_dir / "summary.json"))
+
+        print("\n=== Per-question scores ===")
+        score_columns = [m for m in METRIC_NAMES if m in df.columns]
+        print(df[["user_input", *score_columns]].to_string(index=False))
+
+        print("\n=== Mean scores ===")
+        for metric, value in summary.items():
+            n = sample_counts[metric]
+            flag = "  <-- based on a small sample, treat with caution" if n < len(df) * 0.7 else ""
+            print(f"{metric:20s}: {value:.3f}  (scored {n}/{len(df)} questions){flag}")
+
+        print(f"\nSaved detailed results to {args.output_dir / 'results.csv'}")
+        print(f"Saved summary to {args.output_dir / 'summary.json'}")
+        print(f"Appended run to {history_path}")
+        print(f"Logged run to MLflow experiment '{MLFLOW_EXPERIMENT_NAME}' (run mlflow ui to inspect)")
 
 
 if __name__ == "__main__":

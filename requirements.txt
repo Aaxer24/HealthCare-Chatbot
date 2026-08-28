@@ -10,6 +10,7 @@ langchain-community==0.3.27
 langchain-core==0.3.86
 langchain-groq==0.3.6
 langchain-huggingface==0.3.1
+langsmith>=0.1.147,<0.5
 sentence-transformers==5.0.0
 faiss-cpu==1.11.0
 pypdf==5.8.0

@@ -10,3 +10,6 @@ eval/results/*
 .claude/
 .pytest_cache/
 docs/
+/data
+mlruns/
+mlartifacts/
