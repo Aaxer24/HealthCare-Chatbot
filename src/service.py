@@ -13,7 +13,7 @@ def generate_chat_response(
     chat_history: list[tuple[str, str]],
     config: AppConfig,
 ) -> dict:
-    message_type = classify_message(prompt, config)
+    message_type = classify_message(prompt, chat_history, config)
 
     if message_type == "GENERAL_CHAT":
         answer = answer_general_chat(prompt, config)
@@ -31,7 +31,7 @@ def generate_chat_response(
             "sources": [],
         }
 
-    style_instruction = answer_style_instruction(prompt, config)
+    style_instruction = answer_style_instruction(prompt, chat_history, config)
     question = f"{prompt}\n\nResponse style instruction: {style_instruction}"
     answer, sources = answer_question(question, chat_history, config)
     return {

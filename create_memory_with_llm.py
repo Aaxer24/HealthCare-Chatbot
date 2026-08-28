@@ -18,7 +18,7 @@ def main():
         print("No query provided.")
         return
 
-    style_instruction = answer_style_instruction(user_query, config)
+    style_instruction = answer_style_instruction(user_query, [], config)
     question = f"{user_query}\n\nResponse style instruction: {style_instruction}"
     answer, sources = answer_question(question, [], config)
 

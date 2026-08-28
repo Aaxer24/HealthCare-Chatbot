@@ -11,6 +11,9 @@ from src.prompts import (
 from src.rag import get_llm
 
 
+CLASSIFIER_HISTORY_TURNS = 3
+
+
 def invoke_llm_text(llm: ChatGroq, system_prompt: str, user_prompt: str) -> str:
     response = llm.invoke(
         [
@@ -21,9 +24,19 @@ def invoke_llm_text(llm: ChatGroq, system_prompt: str, user_prompt: str) -> str:
     return str(response.content).strip()
 
 
-def classify_message(prompt: str, config: AppConfig) -> str:
+def with_recent_history(prompt: str, chat_history: list[tuple[str, str]]) -> str:
+    """Prefix `prompt` with the last few turns so a bare follow-up (e.g. "explain it
+    more") can be judged in context instead of in isolation."""
+    if not chat_history:
+        return prompt
+    recent = chat_history[-CLASSIFIER_HISTORY_TURNS:]
+    history_block = "\n".join(f"User: {user}\nAssistant: {assistant}" for user, assistant in recent)
+    return f"Recent conversation:\n{history_block}\n\nLatest message: {prompt}"
+
+
+def classify_message(prompt: str, chat_history: list[tuple[str, str]], config: AppConfig) -> str:
     llm = get_llm(config.model_name, config.groq_api_key, 0.0)
-    label = invoke_llm_text(llm, GENERAL_CLASSIFIER_PROMPT, prompt).upper()
+    label = invoke_llm_text(llm, GENERAL_CLASSIFIER_PROMPT, with_recent_history(prompt, chat_history)).upper()
     if "OUT_OF_SCOPE" in label:
         return "OUT_OF_SCOPE"
     if "GENERAL_CHAT" in label and "MEDICAL_QUESTION" not in label:
@@ -41,9 +54,9 @@ def answer_out_of_scope(prompt: str, config: AppConfig) -> str:
     return invoke_llm_text(llm, OUT_OF_SCOPE_RESPONSE_PROMPT, prompt)
 
 
-def answer_style_instruction(prompt: str, config: AppConfig) -> str:
+def answer_style_instruction(prompt: str, chat_history: list[tuple[str, str]], config: AppConfig) -> str:
     llm = get_llm(config.model_name, config.groq_api_key, 0.0)
-    style = invoke_llm_text(llm, ANSWER_STYLE_PROMPT, prompt).upper()
+    style = invoke_llm_text(llm, ANSWER_STYLE_PROMPT, with_recent_history(prompt, chat_history)).upper()
 
     if "EXPLAIN" in style:
         return (

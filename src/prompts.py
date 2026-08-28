@@ -45,7 +45,7 @@ Standalone question:
 """
 
 GENERAL_CLASSIFIER_PROMPT = """
-Classify the user's message for a medical RAG chatbot.
+Classify the latest user message for a medical RAG chatbot.
 Return exactly one label:
 GENERAL_CHAT - greetings, thanks, goodbye, very light conversational check-ins,
 or questions specifically about the chatbot itself such as what it can do or who it is.
@@ -53,6 +53,12 @@ MEDICAL_QUESTION - symptoms, diseases, medicines, tests, treatments, diet for a
 condition, health risks, or any request needing medical document grounding.
 OUT_OF_SCOPE - non-medical factual or topical questions that are not simple greetings
 or chatbot-capability chat.
+
+You may be given the recent conversation before the latest message. Use it to resolve
+short follow-ups that have no medical keywords on their own, such as "explain it more",
+"why does that happen", "what about treatment", or the same in other languages -- if the
+recent conversation was about a medical topic, classify a follow-up continuing that topic
+as MEDICAL_QUESTION, not OUT_OF_SCOPE.
 """
 
 GENERAL_RESPONSE_PROMPT = """
@@ -74,11 +80,14 @@ Keep the answer under 3 short sentences.
 """
 
 ANSWER_STYLE_PROMPT = """
-Decide how detailed the medical chatbot answer should be.
+Decide how detailed the medical chatbot answer should be for the latest user message.
 Return exactly one compact instruction:
 CONCISE - for simple questions asking what something is or quick guidance.
 EXPLAIN - when the user asks to explain, elaborate, describe in detail, compare,
 discuss causes, mechanisms, reasons, prevention, or says they do not understand.
 PRACTICAL - when the user mainly asks what to do, next steps, diet, lifestyle,
 prevention, or care actions.
+
+You may be given the recent conversation before the latest message -- use it only to
+understand what "it"/"that"/"more" refers to, not to change the style decision itself.
 """

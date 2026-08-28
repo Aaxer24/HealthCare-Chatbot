@@ -3,7 +3,7 @@ from tests.conftest import make_config
 
 
 def test_general_chat_skips_retrieval(monkeypatch):
-    monkeypatch.setattr(service, "classify_message", lambda prompt, config: "GENERAL_CHAT")
+    monkeypatch.setattr(service, "classify_message", lambda prompt, chat_history, config: "GENERAL_CHAT")
     monkeypatch.setattr(service, "answer_general_chat", lambda prompt, config: "Hi! I can answer health questions.")
     monkeypatch.setattr(service, "answer_question", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not retrieve")))
 
@@ -17,7 +17,7 @@ def test_general_chat_skips_retrieval(monkeypatch):
 
 
 def test_out_of_scope_skips_retrieval(monkeypatch):
-    monkeypatch.setattr(service, "classify_message", lambda prompt, config: "OUT_OF_SCOPE")
+    monkeypatch.setattr(service, "classify_message", lambda prompt, chat_history, config: "OUT_OF_SCOPE")
     monkeypatch.setattr(service, "answer_out_of_scope", lambda prompt, config: "I only handle health questions.")
     monkeypatch.setattr(service, "answer_question", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not retrieve")))
 
@@ -28,8 +28,8 @@ def test_out_of_scope_skips_retrieval(monkeypatch):
 
 
 def test_medical_question_retrieves_and_returns_sources(monkeypatch):
-    monkeypatch.setattr(service, "classify_message", lambda prompt, config: "MEDICAL_QUESTION")
-    monkeypatch.setattr(service, "answer_style_instruction", lambda prompt, config: "Be concise.")
+    monkeypatch.setattr(service, "classify_message", lambda prompt, chat_history, config: "MEDICAL_QUESTION")
+    monkeypatch.setattr(service, "answer_style_instruction", lambda prompt, chat_history, config: "Be concise.")
 
     captured = {}
 
