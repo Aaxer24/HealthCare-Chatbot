@@ -86,13 +86,14 @@ def get_reranker() -> CrossEncoder:
 
 
 @lru_cache(maxsize=8)
-def get_llm(model_name: str, groq_api_key: str, temperature: float) -> ChatGroq:
+def get_llm(model_name: str, groq_api_key: str, temperature: float, max_tokens: int | None = None) -> ChatGroq:
     return ChatGroq(
         model_name=model_name,
         temperature=temperature,
         groq_api_key=groq_api_key,
         timeout=30,
         max_retries=2,
+        max_tokens=max_tokens,
     )
 
 

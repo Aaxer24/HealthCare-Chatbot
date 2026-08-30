@@ -214,7 +214,12 @@ def main():
         print(f"Running {len(golden)} golden questions through the live RAG pipeline...")
         samples = run_pipeline(config, golden)
 
-        judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0)
+        # RAGAS's faithfulness metric asks the judge to break the answer into
+        # individual claims and verify each one -- a longer, structured output
+        # than a normal chat reply. Without an explicit max_tokens, Groq's
+        # default cap was cutting that off mid-response (LLMDidNotFinishException),
+        # which silently tanks the score since truncated claims read as unverified.
+        judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0, max_tokens=4096)
 
         print(f"Scoring with RAGAS ({', '.join(selected_metrics)})...")
         # strictness=1 on AnswerRelevancy: the default (3) makes ragas request
