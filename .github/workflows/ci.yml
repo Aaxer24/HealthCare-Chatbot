@@ -80,17 +80,25 @@ jobs:
             exit 1
           fi
 
-      # Regression gate: run a fast subset of the golden set through the live
-      # pipeline and fail the build if quality drops below the floor in
-      # eval/check_thresholds.py. --limit keeps this fast and within Groq's
-      # free-tier rate limits; run the full golden set locally for real
-      # tuning (see eval/results/history.csv and MLflow for that history).
+      # Regression gate: run a fast, cheap subset of the golden set through the
+      # live pipeline and fail the build if quality drops below the floor in
+      # eval/check_thresholds.py.
+      #
+      # --limit and --metrics both exist to protect Groq's free-tier *daily*
+      # token quota (200K tokens/day, shared with the deployed app on the same
+      # key) -- not just its per-minute limit. context_precision/context_recall
+      # call the judge once per retrieved chunk (5x the calls of the other two
+      # with rerank_k=5) and are dropped here entirely; --limit 6 keeps the
+      # question count small. Exhausting the daily quota in CI would also
+      # start failing real chat requests on the live app, since it shares this
+      # same GROQ_API_KEY. Run the full golden set with all four metrics
+      # locally for actual tuning (see eval/results/history.csv and MLflow).
       - name: RAGAS eval-gate
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          python evaluate_chatbot.py --limit 12
-          python eval/check_thresholds.py eval/results/summary.json
+          python evaluate_chatbot.py --limit 6 --metrics faithfulness,answer_relevancy
+          python eval/check_thresholds.py eval/results/summary.json --metrics faithfulness,answer_relevancy
 
       # GHCR image names must be lowercase; the GitHub repo/owner name here
       # has uppercase letters, so this can't just be interpolated directly.

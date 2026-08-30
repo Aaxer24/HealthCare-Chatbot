@@ -21,9 +21,20 @@ DEFAULT_THRESHOLDS = {
 def main():
     parser = argparse.ArgumentParser(description="Check RAGAS summary.json scores against minimum thresholds.")
     parser.add_argument("summary", type=Path, help="Path to summary.json produced by evaluate_chatbot.py")
+    parser.add_argument(
+        "--metrics",
+        type=str,
+        default=",".join(DEFAULT_THRESHOLDS),
+        help="Comma-separated subset of metrics to gate on -- must match what evaluate_chatbot.py --metrics ran.",
+    )
     for metric, default in DEFAULT_THRESHOLDS.items():
         parser.add_argument(f"--min-{metric.replace('_', '-')}", type=float, default=default)
     args = parser.parse_args()
+
+    metrics_to_check = [m.strip() for m in args.metrics.split(",") if m.strip()]
+    unknown = [m for m in metrics_to_check if m not in DEFAULT_THRESHOLDS]
+    if unknown:
+        sys.exit(f"Unknown metric(s): {', '.join(unknown)}. Valid options: {', '.join(DEFAULT_THRESHOLDS)}")
 
     if not args.summary.exists():
         sys.exit(f"Summary file not found: {args.summary}")
@@ -33,7 +44,7 @@ def main():
 
     failures = []
     print("=== Eval-gate thresholds ===")
-    for metric in DEFAULT_THRESHOLDS:
+    for metric in metrics_to_check:
         threshold = getattr(args, f"min_{metric}")
         score = mean.get(metric)
         if score is None:

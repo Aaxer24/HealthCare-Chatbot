@@ -228,10 +228,15 @@ part.
 2. **`build-and-deploy`** (push to `main` only, after tests pass):
    - Pulls `vectorstore/db_faiss` from the DVC S3 remote (the image bakes in whatever `dvc pull`
      retrieves, it doesn't regenerate the index at build time).
-   - Runs a 12-question subset of the golden eval set through the live pipeline and checks the
-     RAGAS scores against the floors in `eval/check_thresholds.py` -- fails the build if a change
-     regressed retrieval or generation quality. (Deliberately a small, fast subset to fit Groq's
-     free-tier rate limits inside CI; run the full 31-question set locally for actual tuning.)
+   - Runs a 6-question subset of the golden eval set through the live pipeline, scored on just
+     `faithfulness`/`answer_relevancy`, and checks those against the floors in
+     `eval/check_thresholds.py` -- fails the build if a change regressed retrieval or generation
+     quality. Deliberately small and cheap: `GROQ_API_KEY` is shared with the deployed app, and
+     Groq's free tier has a *daily* token cap (not just per-minute) -- `context_precision`/
+     `context_recall` are skipped here because they call the judge once per retrieved chunk each,
+     several times the cost of the other two. Run the full 31-question set with all four metrics
+     locally for actual tuning (`evaluate_chatbot.py --metrics <comma-separated-list>` to pick a
+     subset, `--limit N` to cap the question count).
    - Builds the Docker image, pushes it to GHCR, then SSHes into the EC2 instance to pull the new
      image and restart the container.
 
@@ -319,9 +324,12 @@ summary table prints to the console, and the run is logged to MLflow (see below)
 
 To evaluate a different question set, pass `--dataset path/to/file.json` with the same
 `question` / `ground_truth` schema as `eval/golden_qa.json`. Pass `--limit N` to only run the
-first N questions -- useful for a cheap smoke check against Groq's free-tier token limits (this
-is what the CI eval-gate does). Re-run after any change to chunking, retrieval parameters,
-prompts, or the embedding/reranker model to catch regressions before they reach users.
+first N questions, and/or `--metrics faithfulness,answer_relevancy` to run a subset of the four
+metrics -- both exist for cheap iteration against Groq's free-tier *daily* token cap (this is
+what the CI eval-gate does, since `context_precision`/`context_recall` call the judge once per
+retrieved chunk and are the most expensive). Re-run after any change to chunking, retrieval
+parameters, prompts, or the embedding/reranker model to catch regressions before they reach
+users.
 
 ### Experiment tracking (MLflow)
 

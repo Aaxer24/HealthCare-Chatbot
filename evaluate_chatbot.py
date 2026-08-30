@@ -48,6 +48,17 @@ DEFAULT_RESULTS_DIR = Path(__file__).parent / "eval" / "results"
 METRIC_NAMES = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
 MLFLOW_EXPERIMENT_NAME = "healthcare-chatbot-rag-eval"
 
+# context_precision/context_recall call the judge LLM once per retrieved
+# chunk (not once per question), so with rerank_k=5 they can use ~5x the
+# tokens of faithfulness/answer_relevancy. Selectable via --metrics so a
+# token-constrained run (e.g. the CI gate) can skip them.
+METRIC_FACTORIES = {
+    "faithfulness": lambda: Faithfulness(max_retries=METRIC_MAX_RETRIES),
+    "answer_relevancy": lambda: AnswerRelevancy(strictness=1),
+    "context_precision": lambda: ContextPrecision(max_retries=METRIC_MAX_RETRIES),
+    "context_recall": lambda: ContextRecall(max_retries=METRIC_MAX_RETRIES),
+}
+
 
 def get_git_commit() -> str:
     try:
@@ -151,7 +162,23 @@ def main():
         default=None,
         help="Only evaluate the first N questions from the dataset. Useful for cheap iteration against Groq's free-tier token limits.",
     )
+    parser.add_argument(
+        "--metrics",
+        type=str,
+        default=",".join(METRIC_NAMES),
+        help=(
+            "Comma-separated subset of metrics to run: "
+            f"{', '.join(METRIC_NAMES)}. context_precision/context_recall call the judge "
+            "once per retrieved chunk and are the most token-expensive -- drop them for a "
+            "cheap smoke check."
+        ),
+    )
     args = parser.parse_args()
+
+    selected_metrics = [m.strip() for m in args.metrics.split(",") if m.strip()]
+    unknown_metrics = [m for m in selected_metrics if m not in METRIC_FACTORIES]
+    if unknown_metrics:
+        sys.exit(f"Unknown metric(s): {', '.join(unknown_metrics)}. Valid options: {', '.join(METRIC_NAMES)}")
 
     if not DB_FAISS_PATH.exists():
         sys.exit(f"Vector store not found at {DB_FAISS_PATH}. Run create_memory_for_llm.py first.")
@@ -180,6 +207,7 @@ def main():
                 "embedding_model": vectorstore_metadata.get("embedding_model"),
                 "chunk_size": vectorstore_metadata.get("chunk_size"),
                 "chunk_overlap": vectorstore_metadata.get("chunk_overlap"),
+                "metrics": ",".join(selected_metrics),
             }
         )
 
@@ -188,17 +216,12 @@ def main():
 
         judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0)
 
-        print("Scoring with RAGAS (faithfulness, answer relevancy, context precision, context recall)...")
-        metrics = [
-            Faithfulness(max_retries=METRIC_MAX_RETRIES),
-            # strictness (default 3) makes ragas request n=3 completions in a
-            # single call; Groq's API rejects any n > 1 with a 400, which silently
-            # became a NaN for this metric on almost every question. strictness=1
-            # avoids the unsupported parameter entirely.
-            AnswerRelevancy(strictness=1),
-            ContextPrecision(max_retries=METRIC_MAX_RETRIES),
-            ContextRecall(max_retries=METRIC_MAX_RETRIES),
-        ]
+        print(f"Scoring with RAGAS ({', '.join(selected_metrics)})...")
+        # strictness=1 on AnswerRelevancy: the default (3) makes ragas request
+        # n=3 completions in a single call; Groq's API rejects any n > 1 with
+        # a 400, which silently became a NaN for this metric on almost every
+        # question.
+        metrics = [METRIC_FACTORIES[name]() for name in selected_metrics]
         result = evaluate(
             dataset=EvaluationDataset(samples=samples),
             metrics=metrics,
