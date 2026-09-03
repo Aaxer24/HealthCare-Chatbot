@@ -33,7 +33,7 @@ jobs:
   #
   # One-time setup required before this job can succeed:
   #   1. An EC2 instance (Ubuntu) with Docker installed -- see README.
-  #   2. Its security group allows inbound 22 (SSH) and 80 (HTTP).
+  #   2. Its security group allows inbound 22 (SSH), 80 (HTTP) and 443 (HTTPS).
   #   3. Six repo secrets (Settings -> Secrets and variables -> Actions):
   #        EC2_HOST              -- the instance's public IP
   #        EC2_USER              -- ubuntu (or ec2-user for Amazon Linux)
@@ -126,11 +126,16 @@ jobs:
 
       # SSHes into the instance and does a simple pull-and-restart: stop and
       # remove whatever's currently running under this container name (if
-      # anything), pull the freshly-pushed image, start it again. Port 80 on
-      # the host maps to the container's internal $PORT (8080 by default --
-      # see Dockerfile), so the app is reachable directly at the instance's
-      # public IP with no reverse proxy needed. --restart unless-stopped
-      # brings it back automatically if the instance itself reboots.
+      # anything), pull the freshly-pushed image, start it again.
+      #
+      # The app binds 127.0.0.1:8080 (loopback only), NOT port 80: a Caddy
+      # container owns ports 80/443 on the host and reverse-proxies to it,
+      # terminating HTTPS with an automatically-renewed Let's Encrypt cert
+      # for healthcare-chatbot.duckdns.org (see README, Deployment). Do not
+      # change this back to -p 80:8080 -- that port is taken, and the deploy
+      # would fail with "port is already allocated". Caddy is long-lived and
+      # deliberately not touched by this workflow. --restart unless-stopped
+      # brings the app back automatically if the instance itself reboots.
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -145,7 +150,7 @@ jobs:
             docker run -d \
               --name healthcare-chatbot \
               --restart unless-stopped \
-              -p 80:8080 \
+              -p 127.0.0.1:8080:8080 \
               -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
               ${{ steps.image.outputs.name }}:latest
             docker image prune -f

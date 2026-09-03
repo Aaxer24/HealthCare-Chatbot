@@ -123,8 +123,9 @@ set API_BASE_URL=http://127.0.0.1:8000
 The image runs **both** the FastAPI backend and the Streamlit UI inside a single container --
 `docker/entrypoint.sh` starts the API on an internal-only port (`127.0.0.1:8000`), waits for it
 to become healthy, then runs Streamlit in the foreground on the port the container publishes
-(`$PORT`, defaulting to `8080`). There's no separate `api` container or reverse proxy to wire up
--- on EC2 this means `docker run -p 80:8080 ...` is all that's needed to serve it publicly.
+(`$PORT`, defaulting to `8080`). There's no separate `api` container to wire up. On EC2 the
+container binds `127.0.0.1:8080` (loopback only) and a separate Caddy container terminates HTTPS
+in front of it -- see [Deployment](#deployment-aws-ec2).
 
 The FastAPI backend's startup also pre-warms the embedding model, reranker, and FAISS index
 (rather than lazily loading them on the first chat request) -- see `src/api.py`. This mainly
@@ -179,7 +180,8 @@ One-time setup, before the CI/CD pipeline can deploy:
 1. Launch an EC2 instance -- Ubuntu Server LTS, `t3.small` or larger. 2GB+ RAM matters here:
    PyTorch, the embedding model, the cross-encoder reranker, and the FAISS index routinely use
    500MB-1GB+ together, which doesn't leave enough headroom on a 1GB `t3.micro` without adding
-   swap space. Security group needs inbound `22` (SSH) and `80` (HTTP) allowed.
+   swap space. Security group needs inbound `22` (SSH), `80` (HTTP) and `443` (HTTPS) allowed
+   -- port 80 stays open because Let's Encrypt uses it to validate certificate renewals.
 2. Install Docker on it:
    ```bash
    sudo apt-get update
@@ -218,6 +220,38 @@ docker run -d --name healthcare-chatbot --restart unless-stopped \
 The image doesn't go to a paid registry -- it's pushed to GitHub Container Registry (GHCR), which
 authenticates with the workflow's own built-in token, no extra account or secret needed for that
 part.
+
+### HTTPS (Caddy + Let's Encrypt)
+
+The app is served over HTTPS at **https://healthcare-chatbot.duckdns.org** by a
+[Caddy](https://caddyserver.com) container that owns ports 80/443 on the host and reverse-proxies
+to the app on loopback. Caddy obtains and renews the Let's Encrypt certificate automatically --
+there is no certbot cron job to maintain.
+
+The domain is a free [DuckDNS](https://www.duckdns.org) subdomain whose A record points at the
+instance's public IP. **If the instance's public IP ever changes** (it does on stop/start, since
+there's no Elastic IP attached), the DuckDNS record must be updated to match or the site breaks.
+
+One-time setup on the instance:
+
+```bash
+sudo mkdir -p /etc/caddy
+sudo tee /etc/caddy/Caddyfile > /dev/null << 'EOF'
+healthcare-chatbot.duckdns.org {
+	reverse_proxy 127.0.0.1:8080
+}
+EOF
+
+docker run -d --name caddy --restart unless-stopped --network host   -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro   -v caddy_data:/data   -v caddy_config:/config   caddy:2
+```
+
+`--network host` lets Caddy bind 80/443 directly and reach the app at `127.0.0.1:8080`; the
+`caddy_data` volume persists issued certificates across container restarts (without it, every
+restart re-requests a cert and can hit Let's Encrypt rate limits). Caddy handles the WebSocket
+upgrade Streamlit needs automatically, and redirects plain HTTP to HTTPS with a 308.
+
+Caddy is long-lived and is **not** managed by the CI/CD pipeline -- deploys only replace the app
+container. That's also why the deploy publishes the app on `127.0.0.1:8080` rather than port 80.
 
 ## CI/CD
 
