@@ -145,9 +145,23 @@ def render_header() -> None:
         [data-testid="stMarkdownContainer"] p {
             font-size: 1rem;
             line-height: 1.65;
+            color: var(--text);
+        }
+        [data-testid="stChatMessage"] li {
+            color: var(--text);
         }
         [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] {
             color: #7f8da3;
+        }
+        [data-testid="stSidebar"] .stMarkdown p {
+            color: var(--text);
+        }
+        [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+            color: var(--muted);
+        }
+        [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+            background: #151c28;
+            border: 1px dashed #334155;
         }
         [data-testid="stExpander"] {
             border: 1px solid #29364a;

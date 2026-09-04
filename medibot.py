@@ -86,32 +86,35 @@ def render_follow_ups(message: dict) -> None:
 
 
 def render_document_uploader() -> None:
-    """Image upload + OCR, shown above the chat input. Extracted text gets
-    attached to the next question automatically."""
-    if not ocr_available():
-        with st.expander("Upload a report or prescription", expanded=False):
-            st.info("Image upload is unavailable: the OCR engine is not installed on this server.")
-        return
+    """Image upload + OCR, pinned in the sidebar so it's always visible and in
+    the same place -- inline in the chat flow it used to scroll out of view as
+    the conversation grew. Extracted text attaches to the next question."""
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("**Upload a report or prescription**")
 
-    with st.expander("Upload a report or prescription (optional)", expanded=False):
+        if not ocr_available():
+            st.caption("Unavailable: OCR engine not installed on this server.")
+            return
+
         uploaded = st.file_uploader(
-            "Photo or scan of a lab report, prescription or discharge summary",
+            "Photo or scan (optional)",
             type=["png", "jpg", "jpeg", "webp", "bmp", "tiff"],
             key="document_upload",
+            label_visibility="collapsed",
         )
 
         if uploaded is None:
             st.session_state.document_text = ""
+            st.caption("No document attached.")
             return
 
         try:
             with st.spinner("Reading the document..."):
                 text = extract_text_from_image(uploaded.getvalue())
-        except OCRUnavailable as exc:
+        except (OCRUnavailable, ValueError) as exc:
             st.warning(str(exc))
-            return
-        except ValueError as exc:
-            st.warning(str(exc))
+            st.session_state.document_text = ""
             return
 
         if not is_useful(text):
@@ -120,12 +123,10 @@ def render_document_uploader() -> None:
             return
 
         st.session_state.document_text = text
-        st.success(f"Read {len(text)} characters. Ask a question about it below.")
+        st.success(f"Attached -- {len(text)} characters read. Ask about it below.")
         with st.expander("Show extracted text"):
             st.text(text)
-        st.caption(
-            "OCR can misread values. Always confirm results with the clinician who ordered them."
-        )
+        st.caption("OCR can misread values -- confirm results with your clinician.")
 
 
 def render_assistant_response(message: dict, config) -> None:
@@ -175,6 +176,7 @@ def main() -> None:
     initialize_session()
     config = get_config()
     render_sidebar(config)
+    render_document_uploader()
 
     for message in st.session_state.messages:
         if message["role"] == "assistant":
@@ -188,7 +190,6 @@ def main() -> None:
             render_message(message)
 
     render_empty_state()
-    render_document_uploader()
 
     # A clicked follow-up takes priority over the input box on this rerun.
     prompt = st.session_state.pending_prompt or st.chat_input(
