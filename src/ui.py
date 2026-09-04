@@ -17,6 +17,9 @@ def render_header() -> None:
         page_title="Medical Knowledge Chatbot",
         page_icon="M",
         layout="centered",
+        # "auto" (the default) collapses the sidebar on narrower viewports,
+        # which hides the document uploader entirely
+        initial_sidebar_state="expanded",
     )
     st.markdown(
         """
@@ -35,7 +38,15 @@ def render_header() -> None:
             color: var(--text);
         }
         [data-testid="stHeader"] { background: transparent; }
-        [data-testid="stToolbar"], #MainMenu, footer { display: none; }
+        /* Hide Streamlit's chrome piece by piece rather than hiding stToolbar
+           outright -- the sidebar's expand button is rendered inside the
+           toolbar, so hiding the whole thing leaves no way to reopen a
+           collapsed sidebar. */
+        [data-testid="stToolbarActions"],
+        [data-testid="stAppDeployButton"],
+        [data-testid="stMainMenu"],
+        #MainMenu, footer { display: none; }
+        [data-testid="stToolbar"] { background: transparent; }
         .block-container {
             max-width: 1040px;
             padding: 2.25rem 2rem 6.5rem;
@@ -162,6 +173,34 @@ def render_header() -> None:
         [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
             background: #151c28;
             border: 1px dashed #334155;
+        }
+        /* Sidebar collapse/expand arrows default to a dark, semi-transparent
+           colour that is invisible on this theme -- if the sidebar gets
+           collapsed the user can't find the control to bring it back. */
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapseButton"] button,
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="stSidebarCollapsedControl"] button,
+        [data-testid="stExpandSidebarButton"],
+        [data-testid="stExpandSidebarButton"] button {
+            color: var(--text) !important;
+            opacity: 1 !important;
+        }
+        [data-testid="stSidebarCollapseButton"] svg,
+        [data-testid="stSidebarCollapsedControl"] svg,
+        [data-testid="stExpandSidebarButton"] svg {
+            fill: var(--text) !important;
+            color: var(--text) !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] {
+            background: #172033;
+            border: 1px solid #334155;
+            border-radius: 8px;
+        }
+        [data-testid="stExpandSidebarButton"] {
+            background: #172033;
+            border: 1px solid #334155;
+            border-radius: 8px;
         }
         [data-testid="stExpander"] {
             border: 1px solid #29364a;
