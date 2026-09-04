@@ -39,8 +39,7 @@ def test_extract_returns_empty_for_empty_bytes():
 
 
 def test_document_text_is_wrapped_with_clear_delimiters():
-    """The model must be able to tell the user's own report apart from the
-    retrieved reference material."""
+    """Model needs to tell the uploaded doc apart from retrieved context."""
     question = service.build_question_with_document("What does this mean?", "Hb 9.2 g/dL")
     assert "UPLOADED DOCUMENT" in question
     assert "Hb 9.2 g/dL" in question

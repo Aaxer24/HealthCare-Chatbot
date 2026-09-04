@@ -1,15 +1,8 @@
-"""In-memory TTL cache for chat answers.
+"""In-memory TTL cache for chat answers, keyed on prompt + history + config.
 
-Groq's free tier caps tokens per day for the whole organisation, and a single
-answer costs several LLM calls (classify -> style -> condense -> answer, plus
-query rewriting and follow-up generation). Repeated questions are common in a
-medical FAQ-style bot, so caching whole responses is the cheapest available
-saving: a cache hit costs zero tokens.
-
-Deliberately in-process rather than Redis: the app runs as a single uvicorn
-worker in one container, so a shared cache server would add infrastructure for
-no benefit. The cache is lost on redeploy, which is correct -- a new image may
-carry new prompts or a new index, and stale answers should not survive it.
+A cache hit skips every LLM call for that turn, which matters a lot on
+Groq's free tier. Not Redis-backed since we're a single container/worker;
+cache just resets on redeploy, which is fine.
 """
 
 import hashlib
@@ -23,11 +16,7 @@ from src.config import LOGGER
 
 
 class TTLCache:
-    """Small thread-safe LRU cache with per-entry expiry.
-
-    uvicorn serves requests from a thread pool, so every mutation is guarded by
-    a lock; without it two concurrent requests can corrupt the OrderedDict.
-    """
+    """Thread-safe LRU cache with per-entry expiry."""
 
     def __init__(self, maxsize: int = 512, ttl_seconds: int = 86_400) -> None:
         self.maxsize = maxsize
@@ -46,12 +35,11 @@ class TTLCache:
 
             expires_at, value = entry
             if time.time() >= expires_at:
-                # Expired: drop it and report a miss so the caller recomputes.
                 del self._store[key]
                 self.misses += 1
                 return None
 
-            self._store.move_to_end(key)  # mark as most recently used
+            self._store.move_to_end(key)
             self.hits += 1
             return value
 
@@ -61,7 +49,7 @@ class TTLCache:
                 self._store.move_to_end(key)
             self._store[key] = (time.time() + self.ttl_seconds, value)
             while len(self._store) > self.maxsize:
-                self._store.popitem(last=False)  # evict least recently used
+                self._store.popitem(last=False)
 
     def clear(self) -> None:
         with self._lock:
@@ -93,12 +81,7 @@ def get_answer_cache(maxsize: int = 512, ttl_seconds: int = 86_400) -> TTLCache:
 
 
 def normalize_prompt(prompt: str) -> str:
-    """Collapse whitespace and case so trivially different phrasings share a key.
-
-    Only safe because the key also carries the chat history and config; this is
-    normalisation, not fuzzy matching -- "what is anemia?" and "What is anemia?"
-    are the same question, but "anemia treatment" is deliberately not.
-    """
+    """"What is anemia?" and "what is anemia?" should hit the same key."""
     return " ".join(prompt.split()).strip().lower()
 
 
@@ -112,18 +95,10 @@ def make_cache_key(
     enable_reranking: bool,
     index_signature: str = "",
 ) -> str:
-    """Build a cache key covering everything that can change the answer.
-
-    Config and the index signature are part of the key so that changing k,
-    toggling the reranker, switching model, or rebuilding the vector store all
-    invalidate previous entries automatically instead of serving answers that
-    the current pipeline would no longer produce.
-    """
+    """Key covers everything that can change the answer, so a config change
+    or index rebuild naturally invalidates old entries."""
     payload = {
         "prompt": normalize_prompt(prompt),
-        # Only the user turns matter for identity; assistant text is derived
-        # from them and including it would make otherwise-identical
-        # conversations miss the cache because of tiny wording differences.
         "history": [normalize_prompt(user) for user, _ in chat_history],
         "model": model_name,
         "retrieval_k": retrieval_k,

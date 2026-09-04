@@ -1,9 +1,7 @@
-"""Fail (exit 1) if any RAGAS mean score in a summary.json drops below its floor.
+"""Fail (exit 1) if any RAGAS score in summary.json drops below its floor.
 
-Used as a CI regression gate after evaluate_chatbot.py -- these floors catch a
-badly broken pipeline (bad prompt, broken retrieval, wrong model), they are
-not a quality target. Run evaluate_chatbot.py locally against the full golden
-set to actually improve scores; this just stops a regression from shipping.
+CI regression gate, not a quality target -- catches a badly broken pipeline,
+doesn't replace actually running evaluate_chatbot.py to improve scores.
 """
 import argparse
 import json

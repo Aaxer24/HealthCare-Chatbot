@@ -1,31 +1,24 @@
-"""OCR for uploaded reports and prescriptions.
+"""OCR for uploaded reports/prescriptions, via local Tesseract.
 
-Uses Tesseract locally rather than a hosted vision model: this Groq account
-exposes no vision-capable model (the model list is text + Whisper only), so
-there is no API route for image understanding.
+Not a hosted vision model -- this Groq account has none available (model
+list is text + Whisper only). Tesseract is only loaded while processing an
+upload, so it's cheap to keep alongside everything else on the t3.small.
 
-Tesseract is only resident while an upload is being processed, which is what
-makes it affordable on a 2 GB t3.small alongside PyTorch, the embedding model,
-the reranker, FAISS and the BM25 index.
-
-The binary is an OS package, not a Python one -- if it is missing, every
-function here degrades to a clear message rather than raising, so the chatbot
-keeps working without the upload feature.
+If the tesseract binary isn't installed, everything here degrades to a
+clear message instead of crashing the app.
 """
 
 import io
 
 from src.config import LOGGER
 
-# Anything shorter is almost certainly noise from a blurry photo rather than a
-# real document, and feeding it to the model would just invite hallucination.
-MIN_USEFUL_CHARS = 25
+MIN_USEFUL_CHARS = 25  # below this it's noise from a blurry photo, not text
 MAX_OCR_CHARS = 6_000
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 
 class OCRUnavailable(RuntimeError):
-    """Raised when the Tesseract binary is not installed."""
+    """Tesseract binary isn't installed."""
 
 
 def ocr_available() -> bool:
@@ -40,11 +33,7 @@ def ocr_available() -> bool:
 
 
 def extract_text_from_image(image_bytes: bytes) -> str:
-    """Return text found in an image. Raises OCRUnavailable if Tesseract is missing.
-
-    Deliberately does no medical interpretation -- it only recovers text, which
-    is then passed to the normal RAG pipeline as context.
-    """
+    """Just recovers text -- no medical interpretation happens here."""
     if not image_bytes:
         return ""
     if len(image_bytes) > MAX_IMAGE_BYTES:
@@ -60,13 +49,9 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 
     try:
         image = Image.open(io.BytesIO(image_bytes))
-        # Greyscale helps Tesseract on phone photos of printed reports and
-        # costs nothing compared with the OCR pass itself.
-        image = image.convert("L")
+        image = image.convert("L")  # greyscale helps on phone photos
         text = pytesseract.image_to_string(image)
     except Exception as exc:
-        # pytesseract raises TesseractNotFoundError when the binary is absent;
-        # catching broadly keeps a corrupt upload from looking like a crash.
         if "tesseract" in str(exc).lower():
             raise OCRUnavailable(
                 "The Tesseract OCR engine is not installed on this server."
@@ -78,15 +63,13 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 
 
 def clean_ocr_text(text: str) -> str:
-    """Tidy raw OCR output into something worth sending to the model."""
     if not text:
         return ""
 
     lines = []
     for line in text.splitlines():
         stripped = line.strip()
-        # Drop lines that are pure punctuation noise, a common OCR artefact on
-        # table borders and scan edges.
+        # drop punctuation-only lines (table borders, scan edges)
         if stripped and any(char.isalnum() for char in stripped):
             lines.append(stripped)
 

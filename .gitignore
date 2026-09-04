@@ -13,4 +13,5 @@ docs/
 /data
 mlruns/
 mlartifacts/
+mlflow.db  # mlflow 3.x's local tracking store, don't commit this
 eval/feedback/

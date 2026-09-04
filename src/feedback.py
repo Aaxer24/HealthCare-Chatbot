@@ -1,18 +1,13 @@
-"""Persistence for thumbs-up/down feedback on answers.
+"""Thumbs-up/down persistence.
 
-This is the entry point of the improvement loop described in the README: a
-thumbs-down marks a question the pipeline handled badly, and those questions are
-exactly the ones worth adding to the golden evaluation set. Growing the eval set
-from real user pain -- rather than from questions we imagined -- is what keeps
-RAGAS scores meaningful over time.
+Negative feedback is what scripts/review_feedback.py stages into the golden
+eval set, so this is really the input to that improvement loop.
 
-Stored as JSON Lines because the file is append-only and may be written while
-something else reads it; one self-contained JSON object per line means a partial
-write can never corrupt earlier records.
+JSON Lines, append-only -- one JSON object per line so a partial/interrupted
+write can't corrupt earlier records.
 
-IMPORTANT: the container filesystem is ephemeral. On the server this path must
-be a mounted volume, or every redeploy silently discards collected feedback.
-See the deploy step in .github/workflows/ci.yml.
+NOTE: container filesystem is ephemeral. This path must be a mounted volume
+on the server or feedback disappears on every redeploy (see ci.yml).
 """
 
 import json
@@ -25,8 +20,6 @@ from src.config import BASE_DIR, LOGGER
 
 DEFAULT_FEEDBACK_PATH = BASE_DIR / "eval" / "feedback" / "feedback.jsonl"
 
-# Appends happen from uvicorn's thread pool; a lock keeps two concurrent
-# writes from interleaving inside a single line.
 _write_lock = threading.Lock()
 
 
@@ -43,11 +36,8 @@ def record_feedback(
     comment: str = "",
     message_type: str = "",
 ) -> dict:
-    """Append one feedback record. Returns the record written.
-
-    Raises ValueError on an invalid rating so the API can answer 422 rather than
-    silently storing garbage that the review step would later have to filter.
-    """
+    """Appends one record and returns it. Raises ValueError on a bad rating
+    so the API can 422 instead of storing garbage."""
     if rating not in {"up", "down"}:
         raise ValueError(f"rating must be 'up' or 'down', got {rating!r}")
 
@@ -58,8 +48,6 @@ def record_feedback(
         "answer": answer,
         "message_type": message_type,
         "comment": comment,
-        # Kept so a reviewer can see which chunks produced a bad answer without
-        # having to re-run the pipeline.
         "sources": [
             {"source": s.get("source", ""), "snippet": s.get("snippet", "")}
             for s in (sources or [])
@@ -77,11 +65,7 @@ def record_feedback(
 
 
 def load_feedback(path: Path | None = None) -> list[dict]:
-    """Read all feedback records, skipping any corrupt lines.
-
-    A single malformed line (truncated write, manual edit) should not make the
-    whole history unreadable, so bad lines are logged and skipped.
-    """
+    """Skips corrupt lines instead of failing the whole read."""
     path = path or get_feedback_path()
     if not path.exists():
         return []

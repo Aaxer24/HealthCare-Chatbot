@@ -55,11 +55,7 @@ def submit_feedback(
     sources: list[dict] | None = None,
     message_type: str = "",
 ) -> bool:
-    """Send a thumbs up/down. Returns True on success.
-
-    Never raises: losing one feedback record is not worth showing the user an
-    error in the middle of a conversation.
-    """
+    """Send a thumbs up/down. Never raises -- worst case we just lose one record."""
     payload = {
         "question": question,
         "answer": answer,

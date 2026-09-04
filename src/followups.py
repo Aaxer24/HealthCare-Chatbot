@@ -1,13 +1,8 @@
 """Suggested follow-up questions shown under an answer.
 
-Generated from the question and the answer that was actually given, so the
-suggestions stay inside what the document set can support -- suggesting a
-question the corpus cannot answer would send the user straight into a
-"the documents do not cover that" reply.
-
-Costs one extra LLM call per medical answer, so it is behind
-``AppConfig.enable_follow_ups`` and is skipped entirely for general chat and
-out-of-scope replies, where follow-ups make no sense.
+Built from the question + the actual answer given, so suggestions stay
+inside what the docs can support. Costs one extra LLM call, so it's gated by
+AppConfig.enable_follow_ups and skipped for general chat / out-of-scope.
 """
 
 from src.config import LOGGER, AppConfig
@@ -15,8 +10,6 @@ from src.prompts import FOLLOW_UP_PROMPT
 
 MAX_FOLLOW_UPS = 3
 MAX_FOLLOW_UP_CHARS = 120
-# Enough context for relevant suggestions without paying to send a long answer
-# back to the model.
 ANSWER_EXCERPT_CHARS = 1200
 
 
@@ -31,11 +24,7 @@ def _clean_suggestion(line: str) -> str:
 
 
 def generate_follow_ups(question: str, answer: str, config: AppConfig) -> list[str]:
-    """Return up to three follow-up questions; never raises.
-
-    Follow-ups are a nice-to-have garnish on the answer, so any failure returns
-    an empty list rather than breaking a response the user is waiting for.
-    """
+    """Never raises -- these are a nice-to-have, not worth failing the answer over."""
     from src.rag import complete_text
 
     if not config.enable_follow_ups or not answer.strip():
@@ -56,8 +45,7 @@ def generate_follow_ups(question: str, answer: str, config: AppConfig) -> list[s
     seen: set[str] = {question.strip().lower()}
     for line in raw.splitlines():
         candidate = _clean_suggestion(line)
-        # Require a question mark: the model occasionally emits a stray heading
-        # like "Follow-up questions:" which would otherwise become a button.
+        # skip stray headings like "Follow-up questions:" that have no "?"
         if not candidate or "?" not in candidate or candidate.lower() in seen:
             continue
         suggestions.append(candidate)

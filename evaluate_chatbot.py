@@ -15,11 +15,8 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 
 load_dotenv(find_dotenv())
 
-# ragas.metrics still supports these classic metric instances via a deprecation
-# shim (ragas.metrics.collections is the new API, but it requires an
-# instructor/OpenAI-style structured-output client and has no Groq/HF support
-# yet). The classic API works fine with our existing ChatGroq + HuggingFace
-# embeddings stack, so we deliberately keep using it.
+# ragas's new metrics API needs an OpenAI-style structured-output client, no
+# Groq/HF support yet -- sticking with the classic (deprecated) metrics API
 warnings.filterwarnings(
     "ignore", category=DeprecationWarning, message=r"Importing .* from 'ragas\.metrics' is deprecated"
 )
@@ -30,14 +27,9 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import AnswerRelevancy, ContextPrecision, ContextRecall, Faithfulness
 from ragas.run_config import RunConfig
 
-# Groq's Llama models are less consistent than GPT at following ragas's strict
-# JSON output format for these three metrics, which otherwise silently scores
-# a question as NaN after a single failed parse. max_retries makes ragas send
-# the malformed output back to the LLM with a "fix this to match the schema"
-# prompt before giving up, which is the standard mitigation for this gap.
-# Kept modest (not higher) because each retry is extra tokens against Groq's
-# free-tier daily cap, and context_precision/recall already call the LLM once
-# per retrieved chunk.
+# Groq models are less reliable than GPT at ragas's strict JSON format, which
+# otherwise scores a question as NaN on the first bad parse. Kept modest since
+# retries cost extra tokens and context_precision/recall are already expensive.
 METRIC_MAX_RETRIES = 2
 
 from src.config import DB_FAISS_PATH, VECTORSTORE_METADATA_PATH, AppConfig, get_cli_config
@@ -48,10 +40,8 @@ DEFAULT_RESULTS_DIR = Path(__file__).parent / "eval" / "results"
 METRIC_NAMES = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
 MLFLOW_EXPERIMENT_NAME = "healthcare-chatbot-rag-eval"
 
-# context_precision/context_recall call the judge LLM once per retrieved
-# chunk (not once per question), so with rerank_k=5 they can use ~5x the
-# tokens of faithfulness/answer_relevancy. Selectable via --metrics so a
-# token-constrained run (e.g. the CI gate) can skip them.
+# context_precision/context_recall call the judge once per retrieved chunk
+# (not once per question) so they're much pricier -- skippable via --metrics
 METRIC_FACTORIES = {
     "faithfulness": lambda: Faithfulness(max_retries=METRIC_MAX_RETRIES),
     "answer_relevancy": lambda: AnswerRelevancy(strictness=1),
@@ -87,10 +77,7 @@ def append_history(
         "timestamp_utc",
         "git_commit",
         "dataset",
-        # Without these two a 2-question smoke run is indistinguishable from a
-        # full 31-question run in this table, which makes the history
-        # misleading rather than useful.
-        "questions",
+        "questions",  # without this a 6-question smoke run looks the same as a full run
         "metrics",
         "model_name",
         "retrieval_k",
@@ -111,9 +98,7 @@ def append_history(
         **{metric: round(summary.get(metric, float("nan")), 4) for metric in METRIC_NAMES},
     }
 
-    # If the file predates a column being added, rewrite it with the new header
-    # and blanks for the missing values. Appending 12 values under an 11-column
-    # header would silently misalign every future row.
+    # migrate old rows if a column got added, otherwise new rows misalign under the old header
     existing_rows: list[dict] = []
     needs_migration = False
     if history_path.exists():
@@ -249,11 +234,8 @@ def main():
         print(f"Running {len(golden)} golden questions through the live RAG pipeline...")
         samples = run_pipeline(config, golden)
 
-        # RAGAS's faithfulness metric asks the judge to break the answer into
-        # individual claims and verify each one -- a longer, structured output
-        # than a normal chat reply. Without an explicit max_tokens, Groq's
-        # default cap was cutting that off mid-response (LLMDidNotFinishException),
-        # which silently tanks the score since truncated claims read as unverified.
+        # faithfulness needs a long structured response from the judge; without
+        # max_tokens Groq's default cap was truncating it and tanking the score
         judge_llm = get_llm(config.model_name, config.groq_api_key, 0.0, max_tokens=4096)
 
         print(f"Scoring with RAGAS ({', '.join(selected_metrics)})...")

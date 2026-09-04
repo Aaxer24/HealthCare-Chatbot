@@ -19,14 +19,9 @@ from src.ui import (
 def initialize_session() -> None:
     st.session_state.setdefault("messages", [])
     st.session_state.setdefault("chat_history", [])
-    # Set when a follow-up button is clicked; consumed on the next rerun so the
-    # suggestion is submitted exactly as if the user had typed it.
-    st.session_state.setdefault("pending_prompt", None)
-    # Message ids that already have feedback, so the buttons can be disabled
-    # rather than letting one answer be rated repeatedly.
-    st.session_state.setdefault("rated", {})
-    # OCR text from the currently attached image, cleared once it has been sent.
-    st.session_state.setdefault("document_text", "")
+    st.session_state.setdefault("pending_prompt", None)  # set by a follow-up button click
+    st.session_state.setdefault("rated", {})  # message_id -> "up"/"down", so buttons don't double-fire
+    st.session_state.setdefault("document_text", "")  # current OCR'd upload, if any
 
 
 def build_message(
@@ -52,11 +47,7 @@ def trim_history() -> None:
 
 
 def render_feedback_controls(message: dict, config) -> None:
-    """Thumbs up/down under an assistant answer.
-
-    Feeds scripts/review_feedback.py, which promotes poorly-rated questions into
-    the golden evaluation set.
-    """
+    """Thumbs up/down under an assistant answer."""
     message_id = message["id"]
     already = st.session_state.rated.get(message_id)
 
@@ -95,15 +86,9 @@ def render_follow_ups(message: dict) -> None:
 
 
 def render_document_uploader() -> None:
-    """Image upload + OCR, shown above the chat input.
-
-    The extracted text is held in session state and attached to the next
-    question the user asks, so they can upload once and then ask about it
-    naturally.
-    """
+    """Image upload + OCR, shown above the chat input. Extracted text gets
+    attached to the next question automatically."""
     if not ocr_available():
-        # Tesseract is an OS package; without it the rest of the app is fine,
-        # so this degrades to a quiet note rather than an error.
         with st.expander("Upload a report or prescription", expanded=False):
             st.info("Image upload is unavailable: the OCR engine is not installed on this server.")
         return

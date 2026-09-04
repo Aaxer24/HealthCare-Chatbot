@@ -1,18 +1,12 @@
-"""LLM helpers that improve a query before it reaches the retriever.
+"""Query rewriting + multi-query fan-out before retrieval.
 
-Two independent techniques live here:
+Rewriting turns Hinglish/informal input into medical terminology ("sugar ki
+problem" -> "diabetes mellitus symptoms"). Multi-query generates a couple of
+alternate phrasings so retrieval doesn't depend on one lucky wording.
 
-* **Rewriting** turns informal or Hinglish phrasing into the medical vocabulary
-  the source PDFs actually use. "sugar ki problem" retrieves almost nothing;
-  "diabetes mellitus symptoms" retrieves the right chunks.
-* **Multi-query** produces a few differently-angled versions of the same
-  information need, so a single unlucky phrasing does not decide what gets
-  retrieved.
-
-Both cost one LLM call each. They are applied inside the retriever (see
-``rag.QueryExpandingRetriever``) rather than in the service layer so that
-``evaluate_chatbot.py`` -- which builds the chain directly -- measures the same
-retrieval path that production uses.
+Both live in the retriever (rag.QueryExpandingRetriever) instead of the
+service layer so evaluate_chatbot.py exercises the same retrieval path as
+production.
 """
 
 from src.config import LOGGER, AppConfig
@@ -22,9 +16,8 @@ MAX_QUERY_CHARS = 300
 
 
 def _clean_query(text: str) -> str:
-    """Strip the decorations LLMs add even when told not to."""
+    """Strip quotes/bullets/numbering the LLM adds despite being told not to."""
     cleaned = text.strip().strip('"').strip("'").strip()
-    # Remove a leading "1." / "-" / "*" bullet if one slipped through.
     for prefix in ("- ", "* ", "• "):
         if cleaned.startswith(prefix):
             cleaned = cleaned[len(prefix):]
@@ -34,12 +27,8 @@ def _clean_query(text: str) -> str:
 
 
 def rewrite_query(query: str, config: AppConfig) -> str:
-    """Rewrite an informal/Hinglish query into medical search terminology.
-
-    Falls back to the original query on any failure -- a degraded query is far
-    better than a failed request.
-    """
-    from src.rag import complete_text  # local import avoids a circular import
+    """Falls back to the original query on any failure."""
+    from src.rag import complete_text  # avoids a circular import
 
     try:
         rewritten = _clean_query(
@@ -62,13 +51,9 @@ def rewrite_query(query: str, config: AppConfig) -> str:
 
 
 def generate_query_variations(query: str, config: AppConfig, n: int = 2) -> list[str]:
-    """Return up to `n` alternative phrasings of the same information need.
-
-    The original query is never included here; the caller is responsible for
-    always retrieving with it too, so a bad variation can only ever add noise
-    that fusion and reranking then filter out -- it can never replace the
-    user's actual question.
-    """
+    """Alternate phrasings of the same question. Doesn't include the original
+    -- caller always retrieves with that separately, so a bad variation can
+    only add noise, never replace the real query."""
     from src.rag import complete_text
 
     if n <= 0:
@@ -78,7 +63,7 @@ def generate_query_variations(query: str, config: AppConfig, n: int = 2) -> list
         raw = complete_text(
             config,
             MULTI_QUERY_PROMPT.format(question=query, n=n),
-            temperature=0.3,  # a little variety is the point here
+            temperature=0.3,
             max_tokens=200,
         )
     except Exception:

@@ -26,22 +26,9 @@ jobs:
       - name: Run tests
         run: pytest -v
 
-  # Builds the Docker image, pushes it to GitHub Container Registry (GHCR --
-  # no extra registry account needed, authenticates with the workflow's own
-  # built-in token), then SSHes into the EC2 instance to pull and restart the
-  # container, on every push to main once tests pass.
-  #
-  # One-time setup required before this job can succeed:
-  #   1. An EC2 instance (Ubuntu) with Docker installed -- see README.
-  #   2. Its security group allows inbound 22 (SSH), 80 (HTTP) and 443 (HTTPS).
-  #   3. Six repo secrets (Settings -> Secrets and variables -> Actions):
-  #        EC2_HOST              -- the instance's public IP
-  #        EC2_USER              -- ubuntu (or ec2-user for Amazon Linux)
-  #        EC2_SSH_KEY           -- the full contents of the instance's private key
-  #        GROQ_API_KEY          -- passed through to the running container, and used
-  #                                 by the eval-gate step below to call the live model
-  #        AWS_ACCESS_KEY_ID     -- for the DVC S3 remote (data/vectorstore versioning)
-  #        AWS_SECRET_ACCESS_KEY -- see README (Data & Experiment Versioning) for scoping options
+  # Builds + pushes to GHCR, then SSHes into EC2 to pull and restart.
+  # Needs: EC2 instance with Docker (ports 22/80/443 open), and repo secrets
+  # EC2_HOST, EC2_USER, EC2_SSH_KEY, GROQ_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
   build-and-deploy:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -68,9 +55,7 @@ jobs:
           pip install -r requirements-eval.txt
           pip install "dvc[s3]"
 
-      # The vectorstore is DVC-tracked (see data.dvc / vectorstore/db_faiss.dvc),
-      # not committed to git directly -- pull the real index bytes from the S3
-      # remote before the eval-gate and the Docker build both need them.
+      # vectorstore is DVC-tracked, not committed directly -- pull it before eval-gate/build need it
       - name: Pull vector store from DVC remote
         run: |
           dvc pull vectorstore/db_faiss
@@ -80,19 +65,8 @@ jobs:
             exit 1
           fi
 
-      # Regression gate: run a fast, cheap subset of the golden set through the
-      # live pipeline and fail the build if quality drops below the floor in
-      # eval/check_thresholds.py.
-      #
-      # --limit and --metrics both exist to protect Groq's free-tier *daily*
-      # token quota (200K tokens/day, shared with the deployed app on the same
-      # key) -- not just its per-minute limit. context_precision/context_recall
-      # call the judge once per retrieved chunk (5x the calls of the other two
-      # with rerank_k=5) and are dropped here entirely; --limit 6 keeps the
-      # question count small. Exhausting the daily quota in CI would also
-      # start failing real chat requests on the live app, since it shares this
-      # same GROQ_API_KEY. Run the full golden set with all four metrics
-      # locally for actual tuning (see eval/results/history.csv and MLflow).
+      # Regression gate on a small subset -- kept cheap since GROQ_API_KEY's daily
+      # quota is shared with the live app. Run the full set locally for real tuning.
       - name: RAGAS eval-gate
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -100,8 +74,7 @@ jobs:
           python evaluate_chatbot.py --limit 6 --metrics faithfulness,answer_relevancy
           python eval/check_thresholds.py eval/results/summary.json --metrics faithfulness,answer_relevancy
 
-      # GHCR image names must be lowercase; the GitHub repo/owner name here
-      # has uppercase letters, so this can't just be interpolated directly.
+      # GHCR requires lowercase image names, repo name has uppercase letters
       - name: Set lowercase image name
         id: image
         run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
@@ -124,18 +97,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # SSHes into the instance and does a simple pull-and-restart: stop and
-      # remove whatever's currently running under this container name (if
-      # anything), pull the freshly-pushed image, start it again.
-      #
-      # The app binds 127.0.0.1:8080 (loopback only), NOT port 80: a Caddy
-      # container owns ports 80/443 on the host and reverse-proxies to it,
-      # terminating HTTPS with an automatically-renewed Let's Encrypt cert
-      # for healthcare-chatbot.duckdns.org (see README, Deployment). Do not
-      # change this back to -p 80:8080 -- that port is taken, and the deploy
-      # would fail with "port is already allocated". Caddy is long-lived and
-      # deliberately not touched by this workflow. --restart unless-stopped
-      # brings the app back automatically if the instance itself reboots.
+      # Pull-and-restart over SSH. App binds 127.0.0.1:8080, not 80 -- Caddy
+      # owns 80/443 for HTTPS and isn't touched by this workflow. Don't change
+      # this back to -p 80:8080, that port is taken and deploy will fail.
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -147,9 +111,7 @@ jobs:
             docker pull ${{ steps.image.outputs.name }}:latest
             docker stop healthcare-chatbot 2>/dev/null || true
             docker rm healthcare-chatbot 2>/dev/null || true
-            # User feedback must outlive the container it was collected in --
-            # without this bind mount every redeploy silently discards it, and
-            # the golden-set improvement loop never gets any input.
+            # bind mount so feedback survives redeploys
             sudo mkdir -p /opt/healthcare-chatbot/feedback
             sudo chown -R 1000:1000 /opt/healthcare-chatbot/feedback
             docker run -d \

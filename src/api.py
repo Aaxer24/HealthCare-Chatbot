@@ -18,8 +18,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1)
     chat_history: list[ChatMessage] = Field(default_factory=list)
-    # OCR text from a report or prescription the user uploaded, if any.
-    document_text: str = ""
+    document_text: str = ""  # OCR text from an uploaded report, if any
 
 
 class SourcePreview(BaseModel):
@@ -41,8 +40,6 @@ class ChatResponse(BaseModel):
     message_type: Literal["GENERAL_CHAT", "OUT_OF_SCOPE", "MEDICAL_QUESTION"]
     answer: str
     sources: list[SourcePreview]
-    # Surfaced so callers (and load tests) can see how much traffic is being
-    # served without spending Groq tokens.
     cached: bool = False
     follow_ups: list[str] = Field(default_factory=list)
 
@@ -58,9 +55,7 @@ async def lifespan(app: FastAPI):
     get_embedding_model()
     get_reranker()
     get_vectorstore()
-    # BM25 builds in ~1s over 22k chunks, but doing it here keeps the very
-    # first chat request off the critical path like everything else above.
-    try:
+    try:  # BM25 builds in ~1s, doing it here keeps it off the first request too
         get_bm25_retriever()
     except Exception:
         LOGGER.warning("BM25 pre-warm failed; hybrid search will fall back to semantic only", exc_info=True)
@@ -83,12 +78,7 @@ def health() -> dict:
 
 @app.post("/feedback")
 def submit_feedback(request: FeedbackRequest) -> dict:
-    """Record a thumbs up/down on an answer.
-
-    Feedback is the input to the golden-set review step
-    (scripts/review_feedback.py), so a failure here is logged but never
-    surfaced as an error that would interrupt the user's conversation.
-    """
+    """Record a thumbs up/down. Feeds scripts/review_feedback.py."""
     from src.feedback import record_feedback
 
     try:
@@ -115,8 +105,7 @@ def feedback_summary_endpoint() -> dict:
 
 @app.get("/cache/stats")
 def cache_stats() -> dict:
-    """Hit rate and size of the answer cache -- useful for confirming the cache
-    is actually saving tokens rather than silently missing on every request."""
+    """Cache hit rate, so you can tell if it's actually saving tokens."""
     from src.cache import get_answer_cache
 
     return get_answer_cache().stats()

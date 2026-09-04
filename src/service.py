@@ -18,8 +18,7 @@ def _cache_key_for(
     config: AppConfig,
     document_text: str = "",
 ) -> str:
-    # The uploaded document is hashed into the key: the same question about two
-    # different reports must never share a cached answer.
+    # hash the doc into the key so two different reports never share a cached answer
     document_signature = (
         hashlib.sha256(document_text.strip().encode("utf-8")).hexdigest()[:16]
         if document_text.strip()
@@ -37,12 +36,8 @@ def _cache_key_for(
 
 
 def build_question_with_document(prompt: str, document_text: str) -> str:
-    """Attach uploaded document text to the question.
-
-    Kept as a clearly delimited block so the model can tell the user's own
-    report apart from the retrieved medical reference material -- the report
-    supplies the facts, the reference material supplies the interpretation.
-    """
+    """Wraps the doc text in a clear block so the model can tell it apart
+    from the retrieved reference material."""
     if not document_text.strip():
         return prompt
     return (
@@ -60,9 +55,7 @@ def generate_chat_response(
     config: AppConfig,
     document_text: str = "",
 ) -> dict:
-    # A cache hit skips every LLM call for this turn (classification, style,
-    # condensing and generation), which is the single largest saving available
-    # against Groq's shared daily token quota.
+    # cache hit = zero LLM calls for this turn, our biggest lever against the token quota
     cache = get_answer_cache(config.cache_max_size, config.cache_ttl_seconds) if config.enable_cache else None
     cache_key = ""
     if cache is not None:
@@ -74,10 +67,8 @@ def generate_chat_response(
         log_cache_event(False, cache_key)
 
     if document_text.strip():
-        # Uploading a report is itself the signal that this is a medical
-        # question. Classifying "what does this mean?" on its own would hit the
-        # same failure the router had with bare follow-ups and get deflected as
-        # OUT_OF_SCOPE, so routing is bypassed entirely here.
+        # an uploaded report IS the signal this is medical -- classifying "what
+        # does this mean?" alone would deflect it as OUT_OF_SCOPE
         message_type = "MEDICAL_QUESTION"
     else:
         message_type = classify_message(prompt, chat_history, config)
@@ -105,8 +96,6 @@ def generate_chat_response(
             "message_type": message_type,
             "answer": answer,
             "sources": sources,
-            # Only for real medical answers -- follow-ups after a greeting or a
-            # deflection would be noise.
             "follow_ups": generate_follow_ups(prompt, answer, config),
         }
 

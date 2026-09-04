@@ -21,10 +21,7 @@ MAX_HISTORY_TURNS = 6
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 LOGGER = logging.getLogger("medical_chatbot")
 
-# LangSmith tracing is picked up by LangChain automatically from these env
-# vars (LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT) -- no
-# code wiring needed beyond setting a default project name and logging
-# whether it's active, so a misconfigured key doesn't fail silently.
+# LangChain reads LANGCHAIN_TRACING_V2/API_KEY/PROJECT itself, just set a default project name
 os.environ.setdefault("LANGCHAIN_PROJECT", "healthcare-chatbot")
 if os.getenv("LANGCHAIN_TRACING_V2", "").lower() in {"1", "true", "yes", "on"} and not os.getenv("LANGCHAIN_API_KEY"):
     LOGGER.warning("LANGCHAIN_TRACING_V2 is enabled but LANGCHAIN_API_KEY is not set; LangSmith tracing will fail silently.")
@@ -41,13 +38,12 @@ class AppConfig:
     temperature: float
     enable_reranking: bool
     api_base_url: str
-    # Defaults keep existing constructors (and tests) working unchanged.
     enable_cache: bool = True
     cache_ttl_seconds: int = 86_400
     cache_max_size: int = 512
     enable_hybrid_search: bool = True
-    # Each of these costs one extra Groq call per question. They are separately
-    # toggleable so they can be switched off if the daily token quota bites.
+    # query rewriting, multi-query and follow-ups each cost an extra Groq call --
+    # can toggle off individually if the daily quota gets tight
     enable_query_rewriting: bool = True
     multi_query_count: int = 2
     enable_follow_ups: bool = True
