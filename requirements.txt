@@ -13,5 +13,10 @@ langchain-huggingface==0.3.1
 langsmith>=0.1.147,<0.5
 sentence-transformers==5.0.0
 faiss-cpu==1.11.0
+rank-bm25==0.2.2
 pypdf==5.8.0
+# OCR for uploaded reports. pytesseract is only a wrapper -- the tesseract-ocr
+# OS package must also be installed (see Dockerfile).
+pytesseract==0.3.13
+pillow==11.3.0
 tiktoken==0.9.0

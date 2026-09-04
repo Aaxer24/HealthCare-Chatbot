@@ -1,5 +1,6 @@
-timestamp_utc,git_commit,dataset,model_name,retrieval_k,rerank_k,enable_reranking,faithfulness,answer_relevancy,context_precision,context_recall
-2026-07-10T18:07:16+00:00,1b343ce,golden_qa.json,llama-3.3-70b-versatile,8,5,True,0.4091,0.958,0.8571,0.75
-2026-07-11T04:09:32+00:00,1b343ce,golden_qa.json,llama-3.3-70b-versatile,8,5,True,1.0,0.9186,0.6667,0.8333
-2026-08-05T14:29:27+00:00,1b343ce,golden_qa.json,llama-3.3-70b-versatile,8,5,True,nan,0.9167,0.6667,nan
-2026-08-09T05:38:27+00:00,1b343ce,golden_qa.json,llama-3.3-70b-versatile,8,5,True,0.7317,0.9488,0.881,0.8095
+timestamp_utc,git_commit,dataset,questions,metrics,model_name,retrieval_k,rerank_k,enable_reranking,faithfulness,answer_relevancy,context_precision,context_recall
+2026-07-10T18:07:16+00:00,1b343ce,golden_qa.json,,,llama-3.3-70b-versatile,8,5,True,0.4091,0.958,0.8571,0.75
+2026-07-11T04:09:32+00:00,1b343ce,golden_qa.json,,,llama-3.3-70b-versatile,8,5,True,1.0,0.9186,0.6667,0.8333
+2026-08-05T14:29:27+00:00,1b343ce,golden_qa.json,,,llama-3.3-70b-versatile,8,5,True,nan,0.9167,0.6667,nan
+2026-08-09T05:38:27+00:00,1b343ce,golden_qa.json,,,llama-3.3-70b-versatile,8,5,True,0.7317,0.9488,0.881,0.8095
+2026-09-04T06:25:48+00:00,c7be3e8,golden_qa.json,6,"faithfulness,answer_relevancy",openai/gpt-oss-120b,8,5,True,0.7663,0.9398,nan,nan

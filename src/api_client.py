@@ -1,16 +1,18 @@
 import json
 from urllib import error, request
 
-from src.config import AppConfig
+from src.config import LOGGER, AppConfig
 
 
 def call_chat_api(
     prompt: str,
     chat_history: list[tuple[str, str]],
     config: AppConfig,
+    document_text: str = "",
 ) -> dict:
     payload = {
         "prompt": prompt,
+        "document_text": document_text,
         "chat_history": [
             {"role": "user", "content": user_message}
             for user_message, _ in chat_history
@@ -42,3 +44,39 @@ def call_chat_api(
             f"Could not reach API at {config.api_base_url}. "
             "Make sure the FastAPI server is running."
         ) from exc
+
+
+def submit_feedback(
+    question: str,
+    answer: str,
+    rating: str,
+    config: AppConfig,
+    *,
+    sources: list[dict] | None = None,
+    message_type: str = "",
+) -> bool:
+    """Send a thumbs up/down. Returns True on success.
+
+    Never raises: losing one feedback record is not worth showing the user an
+    error in the middle of a conversation.
+    """
+    payload = {
+        "question": question,
+        "answer": answer,
+        "rating": rating,
+        "sources": sources or [],
+        "message_type": message_type,
+    }
+    req = request.Request(
+        url=f"{config.api_base_url}/feedback",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=10) as response:
+            return response.status == 200
+    except Exception:
+        LOGGER.warning("Could not submit feedback", exc_info=True)
+        return False

@@ -147,10 +147,16 @@ jobs:
             docker pull ${{ steps.image.outputs.name }}:latest
             docker stop healthcare-chatbot 2>/dev/null || true
             docker rm healthcare-chatbot 2>/dev/null || true
+            # User feedback must outlive the container it was collected in --
+            # without this bind mount every redeploy silently discards it, and
+            # the golden-set improvement loop never gets any input.
+            sudo mkdir -p /opt/healthcare-chatbot/feedback
+            sudo chown -R 1000:1000 /opt/healthcare-chatbot/feedback
             docker run -d \
               --name healthcare-chatbot \
               --restart unless-stopped \
               -p 127.0.0.1:8080:8080 \
+              -v /opt/healthcare-chatbot/feedback:/app/eval/feedback \
               -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
               ${{ steps.image.outputs.name }}:latest
             docker image prune -f

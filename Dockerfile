@@ -22,8 +22,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ---- runtime --------------------------------------------------------------
 FROM python:3.10-slim AS runtime
 
+# tesseract-ocr powers the report/prescription upload feature (src/ocr.py).
+# Only the English language data is installed; the full language set is ~500MB
+# and this corpus is English-only.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 1000 appuser

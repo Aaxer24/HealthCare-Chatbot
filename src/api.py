@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from src.config import LOGGER, get_cli_config
-from src.rag import get_embedding_model, get_reranker, get_vectorstore
+from src.rag import get_bm25_retriever, get_embedding_model, get_reranker, get_vectorstore
 from src.service import generate_chat_response
 from src.startup_checks import validate_runtime
 
@@ -18,6 +18,8 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1)
     chat_history: list[ChatMessage] = Field(default_factory=list)
+    # OCR text from a report or prescription the user uploaded, if any.
+    document_text: str = ""
 
 
 class SourcePreview(BaseModel):
@@ -26,10 +28,23 @@ class SourcePreview(BaseModel):
     score: str = ""
 
 
+class FeedbackRequest(BaseModel):
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    rating: Literal["up", "down"]
+    sources: list[SourcePreview] = Field(default_factory=list)
+    comment: str = ""
+    message_type: str = ""
+
+
 class ChatResponse(BaseModel):
     message_type: Literal["GENERAL_CHAT", "OUT_OF_SCOPE", "MEDICAL_QUESTION"]
     answer: str
     sources: list[SourcePreview]
+    # Surfaced so callers (and load tests) can see how much traffic is being
+    # served without spending Groq tokens.
+    cached: bool = False
+    follow_ups: list[str] = Field(default_factory=list)
 
 
 @asynccontextmanager
@@ -43,6 +58,12 @@ async def lifespan(app: FastAPI):
     get_embedding_model()
     get_reranker()
     get_vectorstore()
+    # BM25 builds in ~1s over 22k chunks, but doing it here keeps the very
+    # first chat request off the critical path like everything else above.
+    try:
+        get_bm25_retriever()
+    except Exception:
+        LOGGER.warning("BM25 pre-warm failed; hybrid search will fall back to semantic only", exc_info=True)
     yield
 
 
@@ -60,6 +81,47 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.post("/feedback")
+def submit_feedback(request: FeedbackRequest) -> dict:
+    """Record a thumbs up/down on an answer.
+
+    Feedback is the input to the golden-set review step
+    (scripts/review_feedback.py), so a failure here is logged but never
+    surfaced as an error that would interrupt the user's conversation.
+    """
+    from src.feedback import record_feedback
+
+    try:
+        record_feedback(
+            question=request.question,
+            answer=request.answer,
+            rating=request.rating,
+            sources=[s.model_dump() for s in request.sources],
+            comment=request.comment,
+            message_type=request.message_type,
+        )
+        return {"status": "recorded"}
+    except Exception as exc:
+        LOGGER.exception("Failed to record feedback")
+        raise HTTPException(status_code=500, detail="Unable to record feedback right now.") from exc
+
+
+@app.get("/feedback/summary")
+def feedback_summary_endpoint() -> dict:
+    from src.feedback import feedback_summary
+
+    return feedback_summary()
+
+
+@app.get("/cache/stats")
+def cache_stats() -> dict:
+    """Hit rate and size of the answer cache -- useful for confirming the cache
+    is actually saving tokens rather than silently missing on every request."""
+    from src.cache import get_answer_cache
+
+    return get_answer_cache().stats()
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     try:
@@ -70,7 +132,7 @@ def chat(request: ChatRequest) -> ChatResponse:
             if request.chat_history[idx].role == "user"
             and request.chat_history[idx + 1].role == "assistant"
         ]
-        result = generate_chat_response(request.prompt, pairs, config)
+        result = generate_chat_response(request.prompt, pairs, config, request.document_text)
         return ChatResponse(**result)
     except Exception as exc:
         # Log the real error server-side, but never echo internal exception

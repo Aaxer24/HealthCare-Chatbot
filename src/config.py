@@ -41,6 +41,16 @@ class AppConfig:
     temperature: float
     enable_reranking: bool
     api_base_url: str
+    # Defaults keep existing constructors (and tests) working unchanged.
+    enable_cache: bool = True
+    cache_ttl_seconds: int = 86_400
+    cache_max_size: int = 512
+    enable_hybrid_search: bool = True
+    # Each of these costs one extra Groq call per question. They are separately
+    # toggleable so they can be switched off if the daily token quota bites.
+    enable_query_rewriting: bool = True
+    multi_query_count: int = 2
+    enable_follow_ups: bool = True
 
 
 def get_secret(name: str, default: str | None = None) -> str | None:
@@ -73,6 +83,13 @@ def get_config() -> AppConfig | None:
         temperature=float(get_secret("MODEL_TEMPERATURE", "0.1") or "0.1"),
         enable_reranking=get_bool_secret("ENABLE_RERANKING", "true"),
         api_base_url=(get_secret("API_BASE_URL", "http://127.0.0.1:8000") or "http://127.0.0.1:8000").rstrip("/"),
+        enable_cache=get_bool_secret("ENABLE_CACHE", "true"),
+        cache_ttl_seconds=int(get_secret("CACHE_TTL_SECONDS", "86400") or "86400"),
+        cache_max_size=int(get_secret("CACHE_MAX_SIZE", "512") or "512"),
+        enable_hybrid_search=get_bool_secret("ENABLE_HYBRID_SEARCH", "true"),
+        enable_query_rewriting=get_bool_secret("ENABLE_QUERY_REWRITING", "true"),
+        multi_query_count=int(get_secret("MULTI_QUERY_COUNT", "2") or "2"),
+        enable_follow_ups=get_bool_secret("ENABLE_FOLLOW_UPS", "true"),
     )
 
 
@@ -96,4 +113,11 @@ def get_cli_config() -> AppConfig:
         temperature=float(os.getenv("MODEL_TEMPERATURE", "0.1")),
         enable_reranking=os.getenv("ENABLE_RERANKING", "true").lower() in {"1", "true", "yes", "on"},
         api_base_url=os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/"),
+        enable_cache=os.getenv("ENABLE_CACHE", "true").lower() in {"1", "true", "yes", "on"},
+        cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "86400")),
+        cache_max_size=int(os.getenv("CACHE_MAX_SIZE", "512")),
+        enable_hybrid_search=os.getenv("ENABLE_HYBRID_SEARCH", "true").lower() in {"1", "true", "yes", "on"},
+        enable_query_rewriting=os.getenv("ENABLE_QUERY_REWRITING", "true").lower() in {"1", "true", "yes", "on"},
+        multi_query_count=int(os.getenv("MULTI_QUERY_COUNT", "2")),
+        enable_follow_ups=os.getenv("ENABLE_FOLLOW_UPS", "true").lower() in {"1", "true", "yes", "on"},
     )

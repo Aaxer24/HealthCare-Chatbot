@@ -74,12 +74,24 @@ def get_git_commit() -> str:
         return "unknown"
 
 
-def append_history(output_dir: Path, config: AppConfig, summary: dict[str, float], dataset_path: Path) -> Path:
+def append_history(
+    output_dir: Path,
+    config: AppConfig,
+    summary: dict[str, float],
+    dataset_path: Path,
+    question_count: int = 0,
+    metrics_run: str = "",
+) -> Path:
     history_path = output_dir / "history.csv"
     fieldnames = [
         "timestamp_utc",
         "git_commit",
         "dataset",
+        # Without these two a 2-question smoke run is indistinguishable from a
+        # full 31-question run in this table, which makes the history
+        # misleading rather than useful.
+        "questions",
+        "metrics",
         "model_name",
         "retrieval_k",
         "rerank_k",
@@ -90,12 +102,35 @@ def append_history(output_dir: Path, config: AppConfig, summary: dict[str, float
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "git_commit": get_git_commit(),
         "dataset": dataset_path.name,
+        "questions": question_count,
+        "metrics": metrics_run,
         "model_name": config.model_name,
         "retrieval_k": config.retrieval_k,
         "rerank_k": config.rerank_k,
         "enable_reranking": config.enable_reranking,
         **{metric: round(summary.get(metric, float("nan")), 4) for metric in METRIC_NAMES},
     }
+
+    # If the file predates a column being added, rewrite it with the new header
+    # and blanks for the missing values. Appending 12 values under an 11-column
+    # header would silently misalign every future row.
+    existing_rows: list[dict] = []
+    needs_migration = False
+    if history_path.exists():
+        with history_path.open("r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames and list(reader.fieldnames) != fieldnames:
+                existing_rows = list(reader)
+                needs_migration = True
+
+    if needs_migration:
+        with history_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for old_row in existing_rows:
+                writer.writerow({key: old_row.get(key, "") for key in fieldnames})
+            writer.writerow(row)
+        return history_path
 
     write_header = not history_path.exists()
     with history_path.open("a", newline="", encoding="utf-8") as f:
@@ -248,7 +283,10 @@ def main():
             json.dumps({"mean": summary, "scored_of_total": {k: f"{v}/{len(df)}" for k, v in sample_counts.items()}}, indent=2),
             encoding="utf-8",
         )
-        history_path = append_history(args.output_dir, config, summary, args.dataset)
+        history_path = append_history(
+            args.output_dir, config, summary, args.dataset,
+            question_count=len(golden), metrics_run=",".join(selected_metrics),
+        )
 
         mlflow.log_metrics({metric: value for metric, value in summary.items() if value == value})  # skip NaN
         mlflow.log_metrics({f"{metric}_sample_count": count for metric, count in sample_counts.items()})

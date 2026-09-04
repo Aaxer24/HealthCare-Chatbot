@@ -22,6 +22,16 @@ Safety rules:
 - Explain uncertainty clearly and avoid overstating confidence.
 - Include practical next steps and when to seek professional care only when the context supports them.
 
+Uploaded documents:
+- The user may upload a report or prescription; its extracted text appears in the question
+  under "UPLOADED DOCUMENT". Treat that text as a factual record of what their document says.
+- The document tells you WHAT the values, medicines or findings are. The Context below is what
+  tells you what they MEAN -- never interpret a result clinically unless the Context supports it.
+- OCR is imperfect. If a value looks garbled, ambiguous or implausible, say so and ask the user
+  to confirm it rather than interpreting it.
+- Never diagnose from an uploaded document, and always recommend discussing actual results with
+  the clinician who ordered them.
+
 Style rules:
 - Do not use numbered template headings unless the user asks for a list.
 - Start with a direct, natural answer in 1-3 sentences.
@@ -86,6 +96,64 @@ Reply briefly and politely that you focus on health and medical questions based 
 uploaded documents, but you can still handle greetings, thanks, and basic chatbot-related
 questions. Ask the user to send a medical or healthcare question instead.
 Keep the answer under 3 short sentences.
+"""
+
+QUERY_REWRITE_PROMPT = """
+You rewrite a user's medical question into a search query for a medical document index.
+
+Rules:
+- Translate informal, colloquial, Hinglish or Hindi wording into standard medical terminology.
+  Examples: "sugar ki problem" -> "diabetes mellitus symptoms";
+  "BP high rehta hai" -> "hypertension high blood pressure";
+  "saans phoolna" -> "shortness of breath dyspnoea";
+  "pet dard" -> "abdominal pain".
+- Keep clinically important details: age, duration, severity, medicines, existing conditions.
+- Expand a well-known abbreviation to include both forms (e.g. "TB" -> "tuberculosis TB").
+- If the message is already in clear medical English, return it unchanged.
+- Return ONLY the rewritten search query. No explanation, no quotes, no preamble.
+
+User question:
+{question}
+
+Search query:
+"""
+
+MULTI_QUERY_PROMPT = """
+Generate {n} alternative search queries for retrieving passages from a medical reference index.
+
+Each alternative should approach the same underlying information need from a different angle --
+for example one using clinical terminology, one using common patient wording, and one focused on
+a closely related aspect (causes, symptoms, diagnosis or treatment).
+
+Rules:
+- Each query on its own line.
+- No numbering, no bullets, no explanation.
+- Each must be a standalone search query, not a question about the previous one.
+
+Original question:
+{question}
+
+Alternative queries:
+"""
+
+FOLLOW_UP_PROMPT = """
+Based on the medical answer below, suggest 3 natural follow-up questions the user is likely to
+ask next.
+
+Rules:
+- Each question must be answerable from medical reference documents about this topic.
+- Keep each under 12 words.
+- Make them genuinely different from each other (e.g. one about causes, one about treatment,
+  one about prevention or warning signs).
+- Return ONLY the 3 questions, one per line. No numbering, no bullets, no preamble.
+
+Question that was asked:
+{question}
+
+Answer that was given:
+{answer}
+
+Follow-up questions:
 """
 
 ANSWER_STYLE_PROMPT = """

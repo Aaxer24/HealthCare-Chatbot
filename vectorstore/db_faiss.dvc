@@ -1,6 +1,6 @@
 outs:
-- md5: 74a6e55c68f959e9296e0241f5776696.dir
-  size: 48884006
+- md5: 8a61957cdf6e497f61ad06dd92a1a969.dir
+  size: 48303383
   nfiles: 3
   hash: md5
   path: db_faiss

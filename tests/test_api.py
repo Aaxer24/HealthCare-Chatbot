@@ -28,7 +28,7 @@ def test_chat_returns_answer_and_sources(client, monkeypatch):
     monkeypatch.setattr(
         api,
         "generate_chat_response",
-        lambda prompt, chat_history, config: {
+        lambda prompt, chat_history, config, document_text="": {
             "message_type": "MEDICAL_QUESTION",
             "answer": "Diabetes symptoms include...",
             "sources": [{"source": "health-3.pdf, page 1", "snippet": "...", "score": "0.90"}],
@@ -46,7 +46,7 @@ def test_chat_returns_answer_and_sources(client, monkeypatch):
 def test_chat_pairs_alternating_history_correctly(client, monkeypatch):
     captured = {}
 
-    def fake_generate(prompt, chat_history, config):
+    def fake_generate(prompt, chat_history, config, document_text=""):
         captured["chat_history"] = chat_history
         return {"message_type": "MEDICAL_QUESTION", "answer": "ok", "sources": []}
 

@@ -7,12 +7,14 @@ def test_general_chat_skips_retrieval(monkeypatch):
     monkeypatch.setattr(service, "answer_general_chat", lambda prompt, config: "Hi! I can answer health questions.")
     monkeypatch.setattr(service, "answer_question", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not retrieve")))
 
-    result = service.generate_chat_response("hi", [], make_config())
+    result = service.generate_chat_response("hi", [], make_config(enable_cache=False))
 
     assert result == {
         "message_type": "GENERAL_CHAT",
         "answer": "Hi! I can answer health questions.",
         "sources": [],
+        "follow_ups": [],
+        "cached": False,
     }
 
 
@@ -21,7 +23,7 @@ def test_out_of_scope_skips_retrieval(monkeypatch):
     monkeypatch.setattr(service, "answer_out_of_scope", lambda prompt, config: "I only handle health questions.")
     monkeypatch.setattr(service, "answer_question", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not retrieve")))
 
-    result = service.generate_chat_response("what's the weather", [], make_config())
+    result = service.generate_chat_response("what's the weather", [], make_config(enable_cache=False))
 
     assert result["message_type"] == "OUT_OF_SCOPE"
     assert result["sources"] == []
@@ -40,7 +42,9 @@ def test_medical_question_retrieves_and_returns_sources(monkeypatch):
 
     monkeypatch.setattr(service, "answer_question", fake_answer_question)
 
-    result = service.generate_chat_response("what are diabetes symptoms", [("prior", "answer")], make_config())
+    result = service.generate_chat_response(
+        "what are diabetes symptoms", [("prior", "answer")], make_config(enable_cache=False)
+    )
 
     assert result["message_type"] == "MEDICAL_QUESTION"
     assert result["answer"] == "Diabetes symptoms include..."
